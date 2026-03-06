@@ -63,6 +63,35 @@
 
 ## 快速开始
 
+### 一键部署（推荐）
+
+**Windows 用户**：
+```bash
+# 双击运行或在命令行执行
+.\deploy.bat
+```
+
+**macOS / Linux 用户**：
+```bash
+# 赋予执行权限并运行
+chmod +x deploy.sh
+./deploy.sh
+```
+
+### 手动部署
+
+```bash
+# 1. 克隆仓库
+git clone https://github.com/keyupan91-cpu/Feishu-erp-bridge.git
+cd Feishu-erp-bridge
+
+# 2. 安装依赖
+npm install
+
+# 3. 启动服务
+npm run start:all
+```
+
 ### 系统要求
 
 | 项目 | 要求 |
@@ -105,6 +134,25 @@ npm run dev:client   # 只启动前端
 - **公网访问**: `https://xxx.trycloudflare.com`
 
 > **注意**: 公网链接仅在 cloudflared 运行期间有效
+
+### Docker 部署（推荐用于生产环境）
+
+```bash
+# 1. 构建并启动
+docker-compose up -d
+
+# 2. 查看日志
+docker-compose logs -f
+
+# 3. 停止服务
+docker-compose down
+```
+
+**docker-compose 配置说明**：
+- 端口 3001: 后端 API
+- 端口 5173: 前端服务
+- 数据卷：持久化存储服务器数据
+- 可选：包含 Cloudflare Tunnel 服务
 
 ---
 

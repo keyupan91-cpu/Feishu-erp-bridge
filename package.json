@@ -12,7 +12,9 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "start:tunnel": "node scripts/start-tunnel.js",
-    "start:all": "node scripts/start-all.js"
+    "start:all": "node scripts/start-all.js",
+    "start": "node scripts/start-all.js",
+    "install:all": "npm install && cd server && npm install"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

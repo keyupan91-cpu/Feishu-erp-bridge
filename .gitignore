@@ -37,3 +37,12 @@ temp_*
 
 # Claude
 .claude/
+
+# Server data (user data, should not be committed)
+server/data/*.json
+server/data/*_instances/
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
