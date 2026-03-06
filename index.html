@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+
+    <!-- 核心 viewport 设置 - 响应式基础 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <!-- 禁止 iOS 自动缩放 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui" />
+
+    <!-- 禁止 iOS 识别数字为电话号码 -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- PWA 支持 -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="金蝶数据传输" />
+
+    <!-- 全屏显示支持 -->
+    <meta name="full-screen" content="yes" />
+    <meta name="x5-fullscreen" content="true" />
+    <meta name="browsermode" content="application" />
+    <meta name="x5-page-mode" content="app" />
+
+    <!-- 禁止缓存 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
+    <title>金蝶数据传输平台</title>
+
+    <!-- 主题色 -->
+    <meta name="theme-color" content="#4A90E2" />
+
+    <!-- SEO 优化 -->
+    <meta name="description" content="金蝶数据传输平台 - 实现飞书到金蝶的数据自动同步" />
+    <meta name="keywords" content="金蝶，飞书，数据同步，ERP，API" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+
+    <!-- 性能优化：预连接关键资源 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+
+    <!-- 添加触摸滚动优化脚本 -->
+    <script>
+      // 禁止双击放大
+      document.addEventListener('dblclick', function(event) {
+        event.preventDefault();
+      }, { passive: false });
+
+      // 禁止长按菜单
+      document.addEventListener('contextmenu', function(event) {
+        event.preventDefault();
+      }, { passive: false });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,666 @@
+/* 金蝶数据传输平台 - 企业级全局样式 */
+
+:root {
+  /* 主色调 - 浅蓝色 */
+  --primary-color: #4A90E2;
+  --primary-light: #7AB8F5;
+  --primary-dark: #2E6BC7;
+  --primary-bg: #F0F7FF;
+
+  /* 辅助色 - 暖黄色 */
+  --accent-color: #F5A623;
+  --accent-light: #FFD88A;
+  --accent-dark: #D48A0C;
+  --accent-bg: #FFF8E7;
+
+  /* 中性色 */
+  --text-primary: #2C3E50;
+  --text-secondary: #5D6D7E;
+  --text-muted: #95A5A6;
+  --border-color: #E8EDF2;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #F8FAFC;
+  --bg-hover: #F0F4F8;
+
+  /* 功能色 */
+  --success-color: #52C41A;
+  --warning-color: #FAAD14;
+  --error-color: #FF4D4F;
+  --info-color: #1890FF;
+
+  /* 阴影 */
+  --shadow-sm: 0 2px 4px rgba(74, 144, 226, 0.08);
+  --shadow-md: 0 4px 12px rgba(74, 144, 226, 0.12);
+  --shadow-lg: 0 8px 24px rgba(74, 144, 226, 0.16);
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* 过渡 */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.25s ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--text-primary);
+  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  min-height: 100vh;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* 选中文本样式 */
+::selection {
+  background: var(--primary-color);
+  color: #ffffff;
+}
+
+/* 链接样式 */
+a {
+  color: var(--primary-color);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+a:hover {
+  color: var(--primary-dark);
+}
+
+/* 按钮基础样式 */
+button {
+  font-family: inherit;
+}
+
+/* 输入框基础样式 */
+input, textarea, select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* 动画 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 工具类 */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out;
+}
+
+/* 文本截断 */
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 隐藏滚动条但保留功能 */
+.scrollbar-hidden {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
+}
+
+/* ==================== 响应式设计 - 移动端适配 ==================== */
+
+/* 平板和手机通用样式 (<= 768px) */
+@media (max-width: 768px) {
+  html, body {
+    overflow-x: auto;
+  }
+
+  #root {
+    min-width: 320px;
+  }
+
+  /* 字体大小自适应 */
+  body {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: 20px;
+  }
+
+  h2 {
+    font-size: 18px;
+  }
+
+  h3 {
+    font-size: 16px;
+  }
+}
+
+/* 手机端样式 (<= 576px) */
+/* 手机端样式 (<= 576px) - 优化比例 */
+@media (max-width: 576px) {
+  html {
+    font-size: 12px; /* 基准字体缩小 */
+  }
+
+  body {
+    font-size: 12px;
+  }
+
+  /* 容器内边距调整 */
+  .container,
+  .ant-card,
+  .ant-modal-content {
+    border-radius: 8px;
+  }
+
+  /* 卡片样式优化 */
+  .ant-card {
+    margin-bottom: 8px;
+  }
+
+  .ant-card-body {
+    padding: 10px;
+  }
+
+  /* 表格优化 */
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  .ant-table {
+    font-size: 11px;
+  }
+
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: 6px 4px;
+    white-space: nowrap;
+  }
+
+  /* 按钮缩小 */
+  .ant-btn {
+    min-height: 32px;
+    min-width: 32px;
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+
+  .ant-btn-icon-only {
+    width: 32px;
+    height: 32px;
+  }
+
+  .ant-btn-sm {
+    min-height: 28px;
+    padding: 2px 8px;
+    font-size: 11px;
+  }
+
+  /* 输入框和表单元素 */
+  .ant-input,
+  .ant-select-selector,
+  .ant-input-affix-wrapper {
+    min-height: 32px;
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+
+  /* 标签页优化 */
+  .ant-tabs-nav {
+    margin: 0;
+  }
+
+  .ant-tabs-tab {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  /* 头部标题缩小 */
+  .app-title {
+    font-size: 16px !important;
+  }
+
+  /* 底部 TabBar */
+  .mobile-tabbar {
+    height: 48px;
+  }
+
+  /* 模态框优化 */
+  .ant-modal {
+    margin: 8px;
+    max-width: calc(100% - 16px);
+  }
+
+  .ant-modal-content {
+    padding: 10px;
+  }
+
+  .ant-modal-header {
+    padding: 8px 10px;
+  }
+
+  .ant-modal-body {
+    padding: 10px;
+  }
+
+  .ant-modal-footer {
+    padding: 6px 10px;
+  }
+
+  .ant-modal-title {
+    font-size: 14px;
+  }
+
+  /* 列表项优化 */
+  .ant-list-item {
+    padding: 8px 6px;
+  }
+
+  /* 菜单项优化 */
+  .ant-menu-item {
+    height: 40px;
+    line-height: 40px;
+    font-size: 12px;
+  }
+
+  /* 开关调整 */
+  .ant-switch {
+    min-width: 36px;
+    height: 20px;
+  }
+
+  /* 进度条调整 */
+  .ant-progress {
+    margin: 2px 0;
+  }
+
+  .ant-progress-text {
+    font-size: 10px;
+  }
+
+  /* 徽章调整 */
+  .ant-badge-count {
+    min-height: 16px;
+    min-width: 16px;
+    font-size: 9px;
+  }
+
+  /* 工具提示优化 */
+  .ant-tooltip-inner {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  /* 选择器下拉框优化 */
+  .ant-select-dropdown {
+    font-size: 12px;
+  }
+
+  /* 日期选择器优化 */
+  .ant-picker {
+    min-height: 32px;
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+
+  /* 弹窗确认框优化 */
+  .ant-popover-inner-content {
+    padding: 8px;
+    font-size: 12px;
+  }
+
+  /* 通知和消息优化 */
+  .ant-notification-notice {
+    width: calc(100vw - 16px) !important;
+    max-width: 320px;
+    margin: 0 8px 8px;
+    padding: 10px;
+  }
+
+  .ant-message-notice-content {
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* 标签优化 */
+  .ant-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+  }
+
+  /* 标题优化 */
+  h1 {
+    font-size: 16px !important;
+  }
+
+  h2 {
+    font-size: 14px !important;
+  }
+
+  h3 {
+    font-size: 13px !important;
+  }
+
+  /* 文本优化 */
+  .ant-typography {
+    font-size: 12px;
+  }
+}
+
+/* 超小屏幕 (<= 375px) */
+@media (max-width: 375px) {
+  html, body {
+    font-size: 12px;
+  }
+
+  .ant-btn {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .ant-input,
+  .ant-select-selector {
+    font-size: 13px;
+  }
+
+  .ant-table {
+    font-size: 11px;
+  }
+}
+
+/* 横屏模式优化 */
+@media (max-width: 896px) and (orientation: landscape) {
+  .ant-modal {
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .ant-table-container {
+    max-height: 60vh;
+    overflow-y: auto;
+  }
+}
+
+/* 安全区域适配 - iPhone 刘海屏和底部横条 */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .app-header {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .mobile-tabbar {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* 触摸优化 - 禁止双击缩放 */
+@media (max-width: 576px) {
+  * {
+    touch-action: manipulation;
+  }
+
+  /* 禁止选中文本（提升触摸体验） */
+  .no-select {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  /* 触摸反馈 */
+  .touch-feedback:active {
+    opacity: 0.7;
+    transform: scale(0.98);
+    transition: all 0.1s ease;
+  }
+
+  /* 加大按钮点击区域 */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+/* 底部导航栏样式 */
+.mobile-tabbar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 56px;
+  background: #ffffff;
+  border-top: 1px solid #e8edf2;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 1000;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.mobile-tabbar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.mobile-tabbar-item.active {
+  color: var(--primary-color);
+}
+
+.mobile-tabbar-item-icon {
+  font-size: 20px;
+  margin-bottom: 2px;
+}
+
+.mobile-tabbar-item-text {
+  font-size: 11px;
+}
+
+/* 移动端专用类 */
+.mobile-only {
+  display: none;
+}
+
+.desktop-only {
+  display: block;
+}
+
+@media (max-width: 576px) {
+  .mobile-only {
+    display: block;
+  }
+
+  .desktop-only {
+    display: none;
+  }
+
+  /* 隐藏不必要的桌面端元素 */
+  .hide-on-mobile {
+    display: none !important;
+  }
+}
+
+@media (min-width: 577px) {
+  .hide-on-desktop {
+    display: none !important;
+  }
+}
+
+/* 卡片式任务列表 - 移动端优化 */
+.task-card-mobile {
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.task-card-mobile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.task-card-mobile-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.task-card-mobile-status {
+  flex-shrink: 0;
+}
+
+.task-card-mobile-body {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.task-card-mobile-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* 移动端底部操作栏 */
+.mobile-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 8px 12px;
+  background: #ffffff;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  gap: 8px;
+  z-index: 999;
+}
+
+/* 页面容器 - 移动端适配 */
+.page-container {
+  padding: 16px;
+  padding-bottom: calc(56px + env(safe-area-inset-bottom, 0));
+}
+
+@media (max-width: 576px) {
+  .page-container {
+    padding: 12px;
+  }
+}
