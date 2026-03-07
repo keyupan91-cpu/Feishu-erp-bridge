@@ -93,34 +93,54 @@ export function MobileTaskCard({
           type="primary"
           size="middle"
           icon={task.enabled ? <PlayCircleOutlined /> : <StopOutlined />}
-          onClick={onExecute}
+          onClick={(e) => {
+            e.stopPropagation();
+            onExecute?.();
+          }}
           disabled={!task.enabled}
           className="execute-btn"
           block
+          style={{ flex: 2, pointerEvents: 'auto' }}
         >
           {task.enabled ? '执行' : '已禁用'}
         </Button>
         <Button
           size="middle"
           icon={<SettingOutlined />}
-          onClick={onConfig}
+          onClick={(e) => {
+            e.stopPropagation();
+            onConfig?.();
+          }}
           className="config-btn"
+          block
+          style={{ flex: 1, pointerEvents: 'auto' }}
         >
           配置
         </Button>
         <Button
+          type="default"
           size="middle"
           icon={<ThunderboltOutlined />}
-          onClick={onTest}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTest?.();
+          }}
           className="test-btn"
+          block
+          style={{ flex: 1, pointerEvents: 'auto' }}
         >
           测试
         </Button>
         <Button
           size="middle"
           icon={<CloudSyncOutlined />}
-          onClick={onToggle}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle?.();
+          }}
           className="toggle-btn"
+          block
+          style={{ flex: 1, pointerEvents: 'auto' }}
         >
           {task.enabled ? '禁用' : '启用'}
         </Button>

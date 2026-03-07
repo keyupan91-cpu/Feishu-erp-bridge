@@ -6,6 +6,8 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0-brightgreen.svg)](https://nodejs.org/)
 [![Docker](https://img.shields.io/badge/docker-compose-%3E%3D2.0-blue.svg)](https://docs.docker.com/compose/)
 
+**GitHub 仓库**: https://github.com/piki-vibe/Feishu-erp-bridge
+
 ---
 
 ## ⚠️ 为什么需要这个工具？
@@ -34,11 +36,13 @@
 - 🎨 **灵活配置**：查询变量插入 WebAPI 请求，复制粘贴即可完成数据映射
 - 📊 **双向同步**：支持数据回传，同步状态实时写入飞书
 - 🔀 **多任务并行**：支持创建多个独立任务，每个任务配置互不干扰，无限扩展业务节点
+- ✅ **智能验证**：一键验证飞书/金蝶连接、字段配置、完整流程，问题提前发现
 
 ### 安全与效率
 - 🔒 **账户隔离**：多账户独立存储，数据互不可见
 - 🚦 **原子执行**：任务暂停不会在节点间停止，保证数据准确性
 - 📱 **移动办公**：Cloudflare Tunnel 支持，随时随地查看任务状态
+- 🔍 **字段类型自动识别**：支持飞书 23 种字段类型，自动映射处理类型
 
 ---
 
@@ -143,7 +147,7 @@ npm run start:all
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/keyupan91-cpu/Feishu-erp-bridge.git
+git clone https://github.com/piki-vibe/Feishu-erp-bridge.git
 cd Feishu-erp-bridge
 
 # 2. 构建并启动
@@ -167,7 +171,7 @@ docker-compose down
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/keyupan91-cpu/Feishu-erp-bridge.git
+git clone https://github.com/piki-vibe/Feishu-erp-bridge.git
 cd Feishu-erp-bridge
 
 # 2. 安装依赖
@@ -226,7 +230,13 @@ https://xxx.feishu.cn/base/bascnXXXXXXXXXXXXX?table=tblXXXXXXXXXXXXX
 
 1. 点击「新建任务」
 2. 配置飞书字段映射和金蝶数据模板
-3. 点击「测试」按钮验证完整流程
+3. 点击「验证」按钮验证完整流程
+
+**验证测试包含**：
+- ✅ 飞书登录测试：验证 AppID 和 AppSecret 是否正确
+- ✅ 飞书字段查询/筛选/回传测试：验证字段配置是否正确
+- ✅ 金蝶登录测试：验证金蝶连接是否正常
+- ✅ 完整流程测试：使用第一条记录执行完整同步
 
 **数据模板示例**：
 
@@ -269,6 +279,22 @@ https://xxx.feishu.cn/base/bascnXXXXXXXXXXXXX?table=tblXXXXXXXXXXXXX
 - 不同类型的单据（如付款申请单、采购订单）建议分任务配置
 - 大数据量任务建议分批次执行，避免单次处理过多记录
 - 可在「任务管理」页面启用/禁用任务，灵活控制执行计划
+
+---
+
+### 字段类型处理
+
+平台支持飞书多维表格的 23 种字段类型，自动映射处理：
+
+| 飞书字段类型 | 默认处理类型 | 说明 |
+|------------|-------------|------|
+| 文本 | text | 单行/多行文本 |
+| 数字 | number | 支持小数位数配置 |
+| 单选/多选 | select/multiselect | 自动提取选项文本 |
+| 日期 | date | 支持多种格式输出 |
+| 人员 | person | 提取姓名/手机号 |
+| 公式 | auto | 根据公式结果类型自动处理 |
+| 创建/修改时间 | datetime | 时间戳或格式化输出 |
 
 ---
 
@@ -342,10 +368,27 @@ npm run start:all
 
 ## 🔗 相关链接
 
-- [GitHub 仓库](https://github.com/keyupan91-cpu/Feishu-erp-bridge)
+- [GitHub 仓库](https://github.com/piki-vibe/Feishu-erp-bridge)
 - [飞书开放平台](https://open.feishu.cn/)
 - [金蝶云星空开发文档](https://developer.kingdee.com/)
 - [Cloudflare 官方文档](https://developers.cloudflare.com/cloudflare-one/)
+
+---
+
+## 更新日志
+
+### v2.0 (2025)
+- ✨ 新增验证测试功能：支持飞书登录、字段查询、金蝶登录、完整流程测试
+- ✨ 新增字段类型自动识别：支持飞书 23 种字段类型
+- ✨ 新增移动端优化：响应式布局，支持手机/平板访问
+- 🐛 修复 PC 端验证按钮无法显示的问题
+- 🐛 优化多任务并行执行逻辑
+
+### v1.0 (2024)
+- 初始版本发布
+- 支持飞书多维表格与金蝶云星空数据同步
+- 支持多账户隔离
+- 支持数据回传功能
 
 ---
 

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { authApi, dataApi, accountApi, taskApi, instanceApi, getAuthToken, clearAuthToken } from '../services/apiService';
-import type { TaskConfig, TaskInstance, TaskLog, WebAPILog } from '../types';
+import type { TaskConfig, TaskInstance, TaskLog, WebAPILog, TaskVerificationStatus } from '../types';
 import { TaskStatus } from '../types';
 
 // 从 token 中解析用户信息（简单的 base64 解码）
@@ -53,6 +53,7 @@ interface AccountStore {
   deleteTask: (id: string) => Promise<void>;
   copyTask: (id: string, newName: string) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
+  updateVerificationStatus: (taskId: string, status: Partial<TaskVerificationStatus>) => Promise<void>;
 
   // 任务实例
   createTaskInstance: (taskId: string) => Promise<TaskInstance>;
@@ -254,6 +255,30 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       tasks: state.tasks.map((t) =>
         t.id === id ? { ...t, enabled: !t.enabled } : t
       ),
+    }));
+    await get().saveToServer();
+  },
+
+  // 更新任务验证状态
+  updateVerificationStatus: async (taskId, status) => {
+    set((state) => ({
+      tasks: state.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        const currentStatus = t.verificationStatus || {
+          feishuLoginTest: false,
+          feishuFieldTest: false,
+          kingdeeLoginTest: false,
+          fullFlowTest: false,
+        };
+        return {
+          ...t,
+          verificationStatus: {
+            ...currentStatus,
+            ...status,
+            lastVerifiedAt: new Date().toISOString(),
+          },
+        };
+      }),
     }));
     await get().saveToServer();
   },

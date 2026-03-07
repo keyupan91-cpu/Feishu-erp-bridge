@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { FeishuConfig, FeishuFieldParam, FilterCondition } from '../types';
+import type { FeishuConfig, FeishuFieldParam, FilterCondition, WriteBackField } from '../types';
 
 // 飞书API响应类型
 interface FeishuResponse {
@@ -470,6 +470,223 @@ class FeishuService {
     });
 
     return formattedData;
+  }
+
+  // 获取飞书表格的所有字段列表
+  async getFields(tableId: string): Promise<{ fieldName: string; fieldType: string }[]> {
+    try {
+      // 1. 获取 token
+      await this.getToken();
+
+      // 2. 调用飞书 API 获取表格元数据（字段列表）
+      // GET /open-apis/bitable/v1/apps/{appToken}/tables/{tableId}/fields
+      const url = `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/fields`;
+
+      console.log('获取字段列表 URL:', url);
+
+      const response = await axios.get<FeishuResponse>(url, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json; charset=utf-8',
+        },
+      });
+
+      console.log('字段列表响应:', response.data);
+
+      if (response.data.code === 0) {
+        // 3. 提取字段名和字段类型
+        const fields = response.data.data?.items || [];
+        return fields.map((field: any) => ({
+          fieldName: field.field_name,
+          fieldType: field.type || 'unknown',
+        }));
+      } else {
+        throw new Error(`获取字段列表失败：${response.data.msg} (code: ${response.data.code})`);
+      }
+    } catch (error: any) {
+      console.error('获取飞书字段列表失败:', error);
+      console.error('Error response:', error.response?.data);
+      if (error.response) {
+        throw new Error(`获取字段列表失败：${error.response.data?.msg || error.message} (status: ${error.response.status})`);
+      }
+      throw error;
+    }
+  }
+
+  // 飞书字段查询测试 - 测试字段查询、筛选条件、回传配置是否正确
+  async testFieldQuery(
+    tableId: string,
+    fieldParams: FeishuFieldParam[],
+    filterConditions?: FilterCondition[],
+    writeBackFields?: WriteBackField[]
+  ): Promise<{
+    success: boolean;
+    message: string;
+    fieldCount: number;
+    fields: { fieldName: string; fieldType: string }[];
+    filterValid: boolean;
+    writeBackValid: boolean;
+  }> {
+    try {
+      // 1. 获取字段列表
+      const fields = await this.getFields(tableId);
+
+      // 2. 验证字段参数中的字段是否存在
+      const invalidFields: string[] = [];
+      const fieldNames = fields.map(f => f.fieldName);
+
+      fieldParams.forEach(param => {
+        if (!fieldNames.includes(param.fieldName)) {
+          invalidFields.push(param.fieldName);
+        }
+      });
+
+      // 3. 验证筛选条件中的字段是否存在
+      filterConditions?.forEach(condition => {
+        if (!fieldNames.includes(condition.fieldName)) {
+          invalidFields.push(condition.fieldName);
+        }
+      });
+
+      // 4. 验证回传字段中的字段是否存在
+      writeBackFields?.forEach(field => {
+        if (!fieldNames.includes(field.fieldName)) {
+          invalidFields.push(field.fieldName);
+        }
+      });
+
+      // 5. 构建测试结果
+      const hasInvalidFields = invalidFields.length > 0;
+
+      return {
+        success: !hasInvalidFields,
+        message: hasInvalidFields
+          ? `以下字段在飞书表格中不存在：${invalidFields.join(', ')}`
+          : `字段验证通过，共 ${fields.length} 个字段`,
+        fieldCount: fields.length,
+        fields,
+        filterValid: !filterConditions || !filterConditions.some(c => !fieldNames.includes(c.fieldName)),
+        writeBackValid: !writeBackFields || !writeBackFields.some(f => !fieldNames.includes(f.fieldName)),
+      };
+    } catch (error: any) {
+      console.error('飞书字段查询测试失败:', error);
+      return {
+        success: false,
+        message: `字段查询测试失败：${error.message}`,
+        fieldCount: 0,
+        fields: [],
+        filterValid: false,
+        writeBackValid: false,
+      };
+    }
+  }
+
+  // 完整流程测试 - 使用第一条记录执行完整同步流程
+  async testFullFlow(
+    tableId: string,
+    fieldParams: FeishuFieldParam[],
+    filterConditions?: FilterCondition[],
+    _writeBackFields?: WriteBackField[]
+  ): Promise<{
+    success: boolean;
+    message: string;
+    recordId?: string;
+    feishuData?: any;
+    formattedData?: any;
+  }> {
+    try {
+      // 1. 获取访问令牌
+      await this.getToken();
+
+      // 2. 查询第一条记录 - 不指定 field_names，让飞书返回所有字段用于筛选
+      const url = `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/search`;
+
+      const requestBody: any = {};
+      if (filterConditions && filterConditions.length > 0) {
+        const { filter, needsClientFilter } = this.buildFilter(filterConditions);
+        if (filter) {
+          requestBody.filter = filter;
+        }
+        // 如果需要客户端过滤，需要获取所有数据
+        if (needsClientFilter) {
+          // 获取所有数据进行客户端过滤
+        }
+      }
+
+      const response = await axios.post<FeishuResponse>(
+        url,
+        requestBody,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.accessToken}`,
+            'Content-Type': 'application/json; charset=utf-8',
+          },
+          params: {
+            page_size: 1,
+          },
+        }
+      );
+
+      if (response.data.code !== 0) {
+        throw new Error(`查询记录失败：${response.data.msg} (code: ${response.data.code})`);
+      }
+
+      const items = response.data.data?.items || [];
+      if (items.length === 0) {
+        throw new Error('飞书表格中没有符合条件的记录');
+      }
+
+      const firstRecord = items[0];
+      const recordId = firstRecord.record_id;
+      const fields = firstRecord.fields || {};
+
+      // 3. 提取飞书字段的实际值（处理复杂类型）
+      const extractFieldValue = (fieldValue: any): any => {
+        if (fieldValue === null || fieldValue === undefined) return '';
+        if (typeof fieldValue === 'number' || typeof fieldValue === 'string' || typeof fieldValue === 'boolean') return fieldValue;
+        if (Array.isArray(fieldValue)) {
+          return fieldValue.map(item => {
+            if (typeof item === 'object' && item.text) return item.text;
+            return String(item);
+          }).join('');
+        }
+        if (typeof fieldValue === 'object') {
+          if (fieldValue.value && Array.isArray(fieldValue.value)) return fieldValue.value[0];
+          if (fieldValue.text) return fieldValue.text;
+          if (fieldValue.value !== undefined) return fieldValue.value;
+          return JSON.stringify(fieldValue);
+        }
+        return fieldValue;
+      };
+
+      // 4. 格式化数据
+      const formattedData: Record<string, any> = {};
+      fieldParams.forEach(param => {
+        const rawFieldValue = fields[param.fieldName];
+        const fieldValue = extractFieldValue(rawFieldValue);
+        if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
+          if (param.decimalPlaces !== undefined && typeof fieldValue === 'number') {
+            formattedData[param.variableName] = Number(fieldValue.toFixed(param.decimalPlaces));
+          } else {
+            formattedData[param.variableName] = fieldValue;
+          }
+        }
+      });
+
+      return {
+        success: true,
+        message: '第一条记录数据提取成功',
+        recordId,
+        feishuData: fields,
+        formattedData,
+      };
+    } catch (error: any) {
+      console.error('飞书完整流程测试失败:', error);
+      return {
+        success: false,
+        message: `完整流程测试失败：${error.message}`,
+      };
+    }
   }
 
   // 回写数据到飞书

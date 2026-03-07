@@ -10,12 +10,27 @@ export const TaskStatus = {
 
 export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
 
+// 任务验证状态
+export interface TaskVerificationStatus {
+  feishuLoginTest: boolean;      // 飞书登录测试
+  feishuFieldTest: boolean;      // 飞书字段查询/筛选/回传测试
+  kingdeeLoginTest: boolean;     // 金蝶登录测试
+  fullFlowTest: boolean;         // 第一条记录完整流程测试
+  lastVerifiedAt?: string;       // 最后验证时间
+}
+
+// 字段处理类型
+export type FieldProcessType = 'auto' | 'text' | 'number' | 'date' | 'datetime' | 'timestamp' | 'select' | 'multiselect' | 'checkbox' | 'person' | 'phone';
+
 // 飞书字段参数
 export interface FeishuFieldParam {
   id: string;
   variableName: string;
   fieldName: string;
-  decimalPlaces?: number; // 小数位数
+  processType?: FieldProcessType; // 处理类型（默认 auto 自动检测）
+  decimalPlaces?: number; // 小数位数（数字类型，默认 2）
+  dateFormat?: 'YYYY-MM-DD' | 'YYYY/MM/DD' | 'YYYYMMDD' | 'timestamp'; // 日期格式（日期类型）
+  sourceFieldType?: number; // 飞书字段类型编码（自动填充，如 1=文本，2=数字，5=日期）
 }
 
 // 筛选条件
@@ -73,6 +88,7 @@ export interface TaskConfig {
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
+  verificationStatus?: TaskVerificationStatus;  // 验证状态
 }
 
 // 任务执行记录

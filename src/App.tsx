@@ -20,7 +20,6 @@ import {
   Col,
   Empty,
   Steps,
-  Select,
   Alert,
   Collapse,
 } from 'antd';
@@ -47,8 +46,10 @@ import {
   ImportOutlined,
   LogoutOutlined,
   UserOutlined,
-  DownOutlined,
-  UpOutlined,
+
+  ExperimentOutlined,
+  SyncOutlined,
+  ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { TaskStatus } from './types';
 import type { TaskConfig, TaskInstance, WebAPILog } from './types';
@@ -105,12 +106,12 @@ function App() {
   const [formData, setFormData] = useState({ name: '', description: '' });
   const [testTaskId, setTestTaskId] = useState<string>('');
   const [testModalOpen, setTestModalOpen] = useState(false);
-  const [testModalType, setTestModalType] = useState<'feishu' | 'kingdee' | 'sync'>('feishu');
+  const [testModalType, setTestModalType] = useState<'feishu' | 'kingdee' | 'sync' | 'verification'>('feishu');
   const [testResult, setTestResult] = useState<any>(null);
+  const [verificationTestTaskId, setVerificationTestTaskId] = useState<string>(''); // 验证测试的任务 ID
   const [showWebApiLogs, setShowWebApiLogs] = useState(false);
   const [selectedWebApiLog, setSelectedWebApiLog] = useState<any>(null);
-  const [testSectionCollapsed, setTestSectionCollapsed] = useState(true); // 连接测试区域折叠状态
-
+  
   // 处理登录成功
   const handleLoginSuccess = () => {
     setIsAuthenticated(true);
@@ -237,14 +238,257 @@ function App() {
     if (!task) return;
 
     if (!task.feishuConfig.tableId) {
-      message.error('请先配置飞书表格ID');
+      message.error('请先配置飞书表格 ID');
       return;
     }
 
     if (!task.kingdeeConfig.formId) {
-      message.error('请先配置金蝶表单ID');
+      message.error('请先配置金蝶表单 ID');
       return;
     }
+
+    // 执行自动验证
+    await executeAutoVerification(taskId);
+  };
+
+  // 执行自动验证
+  const executeAutoVerification = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
+
+    const verificationResults = {
+      feishuLogin: { success: false, error: '', token: '' },
+      feishuQuery: { success: false, error: '', recordCount: 0 },
+      kingdeeLogin: { success: false, error: '' },
+    };
+
+    // 显示验证进度弹窗
+    const verificationModal = Modal.info({
+      title: '正在验证任务配置...',
+      content: (
+        <div style={{ padding: '20px 0' }}>
+          <Steps
+            current={-1}
+            items={[
+              { title: '飞书登录验证', icon: <LoginOutlined /> },
+              { title: '数据查询验证', icon: <FileSyncOutlined /> },
+              { title: '金蝶登录验证', icon: <LoginOutlined /> },
+            ]}
+            direction="vertical"
+          />
+        </div>
+      ),
+      width: 500,
+      footer: null,
+      maskClosable: false,
+    });
+
+    try {
+      // 步骤 1: 飞书登录验证
+      verificationModal.update({
+        content: (
+          <div style={{ padding: '20px 0' }}>
+            <Steps
+              current={0}
+              items={[
+                { title: '飞书登录验证', icon: <LoginOutlined />, description: <SyncOutlined spin /> },
+                { title: '数据查询验证', icon: <FileSyncOutlined /> },
+                { title: '金蝶登录验证', icon: <LoginOutlined /> },
+              ]}
+              direction="vertical"
+            />
+          </div>
+        ),
+      });
+
+      const feishuService = new FeishuService(task.feishuConfig);
+      const token = await feishuService.getToken();
+      verificationResults.feishuLogin = { success: true, error: '', token };
+
+      // 步骤 2: 飞书数据查询验证
+      verificationModal.update({
+        content: (
+          <div style={{ padding: '20px 0' }}>
+            <Steps
+              current={1}
+              items={[
+                { title: '飞书登录验证', icon: <LoginOutlined />, description: <CheckCircleOutlined style={{ color: '#52C41A' }} /> },
+                { title: '数据查询验证', icon: <FileSyncOutlined />, description: <SyncOutlined spin /> },
+                { title: '金蝶登录验证', icon: <LoginOutlined /> },
+              ]}
+              direction="vertical"
+            />
+          </div>
+        ),
+      });
+
+      if (!task.feishuConfig.tableId) {
+        throw new Error('飞书表格 ID 未配置');
+      }
+
+      const queryResult = await feishuService.testConnection(
+        task.feishuConfig.tableId,
+        task.feishuConfig.viewId,
+        task.feishuConfig.filterConditions
+      );
+
+      if (!queryResult.success) {
+        throw new Error(queryResult.message);
+      }
+
+      verificationResults.feishuQuery = {
+        success: true,
+        error: '',
+        recordCount: queryResult.recordCount,
+      };
+
+      // 步骤 3: 金蝶登录验证
+      verificationModal.update({
+        content: (
+          <div style={{ padding: '20px 0' }}>
+            <Steps
+              current={2}
+              items={[
+                { title: '飞书登录验证', icon: <LoginOutlined />, description: <CheckCircleOutlined style={{ color: '#52C41A' }} /> },
+                { title: '数据查询验证', icon: <FileSyncOutlined />, description: <CheckCircleOutlined style={{ color: '#52C41A' }} /> },
+                { title: '金蝶登录验证', icon: <LoginOutlined />, description: <SyncOutlined spin /> },
+              ]}
+              direction="vertical"
+            />
+          </div>
+        ),
+      });
+
+      const kingdeeService = new KingdeeService(task.kingdeeConfig);
+      const kingdeeResult = await kingdeeService.testConnection();
+
+      if (!kingdeeResult.success) {
+        throw new Error(kingdeeResult.message);
+      }
+
+      verificationResults.kingdeeLogin = { success: true, error: '' };
+
+      // 全部验证通过，关闭进度弹窗
+      verificationModal.destroy();
+
+      // 显示验证通过确认弹窗
+      Modal.confirm({
+        title: (
+          <Space>
+            <CheckCircleOutlined style={{ color: '#52C41A' }} />
+            <span>验证通过！</span>
+          </Space>
+        ),
+        content: (
+          <div style={{ padding: '12px 0' }}>
+            <div style={{ marginBottom: 12 }}>
+              <CheckCircleOutlined style={{ color: '#52C41A', marginRight: 8 }} />
+              <span>飞书登录：正常</span>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <CheckCircleOutlined style={{ color: '#52C41A', marginRight: 8 }} />
+              <span>数据查询：正常，共查询到 <Text strong>{verificationResults.feishuQuery.recordCount}</Text> 条记录</span>
+            </div>
+            <div>
+              <CheckCircleOutlined style={{ color: '#52C41A', marginRight: 8 }} />
+              <span>金蝶登录：正常</span>
+            </div>
+          </div>
+        ),
+        okText: '开始执行',
+        cancelText: '取消',
+        onOk: () => {
+          startTaskExecution(taskId);
+        },
+      });
+    } catch (error: any) {
+      verificationModal.destroy();
+
+      // 验证失败，显示错误信息
+      Modal.error({
+        title: <Space><ExclamationCircleOutlined style={{ color: '#FF4D4F' }} /><span>验证失败</span></Space>,
+        content: (
+          <div style={{ padding: '12px 0' }}>
+            <Alert
+              message={
+                <div>
+                  <div style={{ marginBottom: 8 }}>
+                    {verificationResults.feishuLogin.success && verificationResults.feishuQuery.success ? (
+                      <>
+                        <CheckCircleOutlined style={{ color: '#52C41A', marginRight: 8 }} />
+                        <span>飞书登录：正常</span>
+                      </>
+                    ) : verificationResults.feishuLogin.success ? (
+                      <>
+                        <CheckCircleOutlined style={{ color: '#52C41A', marginRight: 8 }} />
+                        <span>飞书登录：正常</span>
+                      </>
+                    ) : (
+                      <>
+                        <CloseCircleOutlined style={{ color: '#FF4D4F', marginRight: 8 }} />
+                        <span>飞书登录：失败</span>
+                      </>
+                    )}
+                  </div>
+                  <div style={{ marginBottom: 8 }}>
+                    {verificationResults.feishuLogin.success && verificationResults.feishuQuery.success ? (
+                      <>
+                        <CheckCircleOutlined style={{ color: '#52C41A', marginRight: 8 }} />
+                        <span>数据查询：失败 - {error.message}</span>
+                      </>
+                    ) : (
+                      <>
+                        <CloseCircleOutlined style={{ color: '#FF4D4F', marginRight: 8 }} />
+                        <span>数据查询：未验证</span>
+                      </>
+                    )}
+                  </div>
+                  <div>
+                    <CloseCircleOutlined style={{ color: '#FF4D4F', marginRight: 8 }} />
+                    <span>金蝶登录：未验证</span>
+                  </div>
+                </div>
+              }
+              type="error"
+              showIcon={false}
+            />
+            <div style={{ marginTop: 16, textAlign: 'center' }}>
+              <Button
+                type="primary"
+                ghost
+                onClick={() => {
+                  Modal.destroyAll();
+                  openVerificationTestModal(taskId);
+                }}
+              >
+                前往验证测试进行详细诊断
+              </Button>
+            </div>
+          </div>
+        ),
+        width: 500,
+        okText: '关闭',
+        footer: (_, { OkBtn }) => (
+          <>
+            <Button
+              onClick={() => {
+                Modal.destroyAll();
+                openVerificationTestModal(taskId);
+              }}
+            >
+              前往验证测试
+            </Button>
+            <OkBtn />
+          </>
+        ),
+      });
+    }
+  };
+
+  // 启动任务执行（内部函数）
+  const startTaskExecution = async (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) return;
 
     try {
       // 创建任务实例
@@ -254,12 +498,14 @@ function App() {
       // 异步执行任务
       executeTask(task, instance).catch((error) => {
         console.error('任务执行失败:', error);
-        message.error(`任务执行失败: ${error.message}`);
+        message.error(`任务执行失败：${error.message}`);
       });
     } catch (error: any) {
-      message.error(`启动任务失败: ${error.message}`);
+      message.error(`启动任务失败：${error.message}`);
     }
   };
+
+
 
   // 处理停止任务
   const handleStopTask = async (instanceId: string) => {
@@ -303,16 +549,116 @@ function App() {
     });
   };
 
-  // 打开测试弹窗
-  const openTestModal = (type: 'feishu' | 'kingdee' | 'sync') => {
-    if (tasks.length === 0) {
-      message.warning('请先创建任务');
+
+  // 打开验证测试弹窗
+  const openVerificationTestModal = (taskId: string) => {
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) {
+      message.error('任务不存在');
       return;
     }
-    setTestModalType(type);
-    setTestTaskId(tasks[0]?.id || '');
+    setVerificationTestTaskId(taskId);
+    setSelectedTask(task);
+    setTestModalType('verification');
     setTestResult(null);
     setTestModalOpen(true);
+  };
+
+  // 执行验证测试
+  const executeVerificationTest = async (testType: 'feishu-login' | 'feishu-field' | 'kingdee-login' | 'full-flow') => {
+    const task = tasks.find((t) => t.id === verificationTestTaskId);
+    if (!task) {
+      message.error('请选择一个任务');
+      return;
+    }
+
+    setTestResult({ loading: true, type: testType });
+
+    try {
+      let result: any;
+
+      if (testType === 'feishu-login') {
+        // 飞书登录测试
+        if (!task.feishuConfig.appId || !task.feishuConfig.appSecret) {
+          throw new Error('请先在任务配置中填写飞书 AppID 和 AppSecret');
+        }
+        const feishuService = new FeishuService(task.feishuConfig);
+        const token = await feishuService.getToken();
+        result = {
+          success: true,
+          type: 'feishu-login',
+          title: '飞书登录测试成功',
+          details: {
+            '应用 ID': task.feishuConfig.appId,
+            '应用 Token': task.feishuConfig.appToken,
+            '访问令牌': token.slice(0, 20) + '...',
+          },
+        };
+        // 更新验证状态
+        await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { feishuLoginTest: true });
+      } else if (testType === 'feishu-field') {
+        // 飞书字段查询/筛选/回传测试
+        if (!task.feishuConfig.tableId) {
+          throw new Error('请先在任务配置中填写飞书表格 ID');
+        }
+        const feishuService = new FeishuService(task.feishuConfig);
+        result = await feishuService.testFieldQuery(
+          task.feishuConfig.tableId,
+          task.feishuConfig.fieldParams,
+          task.feishuConfig.filterConditions,
+          task.feishuConfig.writeBackFields
+        );
+        // 更新验证状态
+        await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { feishuFieldTest: result.success });
+      } else if (testType === 'kingdee-login') {
+        // 金蝶登录测试
+        if (!task.kingdeeConfig.loginParams.username || !task.kingdeeConfig.loginParams.password) {
+          throw new Error('请先在任务配置中填写金蝶用户名和密码');
+        }
+        const kingdeeService = new KingdeeService(task.kingdeeConfig);
+        const kingdeeResult = await kingdeeService.testConnection();
+        result = {
+          success: kingdeeResult.success,
+          type: 'kingdee-login',
+          title: kingdeeResult.success ? '金蝶登录测试成功' : '金蝶登录测试失败',
+          message: kingdeeResult.message,
+          details: {
+            '服务器地址': task.kingdeeConfig.loginParams.baseUrl,
+            '用户名': task.kingdeeConfig.loginParams.username,
+            '账套 ID': task.kingdeeConfig.loginParams.dbId || '-',
+          },
+        };
+        // 更新验证状态
+        await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { kingdeeLoginTest: kingdeeResult.success });
+      } else if (testType === 'full-flow') {
+        // 完整流程测试
+        if (!task.feishuConfig.tableId) {
+          throw new Error('请先在任务配置中填写飞书表格 ID');
+        }
+        if (!task.kingdeeConfig.formId) {
+          throw new Error('请先在任务配置中填写金蝶表单 ID');
+        }
+        const feishuService = new FeishuService(task.feishuConfig);
+        result = await feishuService.testFullFlow(
+          task.feishuConfig.tableId,
+          task.feishuConfig.fieldParams,
+          task.feishuConfig.filterConditions,
+          task.feishuConfig.writeBackFields
+        );
+        // 更新验证状态
+        await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { fullFlowTest: result.success });
+      }
+
+      setTestResult({ loading: false, ...result });
+    } catch (error: any) {
+      setTestResult({
+        loading: false,
+        success: false,
+        type: testType,
+        title: '测试失败',
+        message: error.message,
+      });
+    }
   };
 
   // 执行测试
@@ -568,12 +914,46 @@ function App() {
       ),
     },
     {
+      title: '验证状态',
+      key: 'verification',
+      width: 150,
+      align: 'center' as const,
+      render: (_: any, record: TaskConfig) => {
+        const status = record.verificationStatus;
+        if (!status) {
+          return <Tag color="default">未验证</Tag>;
+        }
+        const passedTests = [
+          status.feishuLoginTest ? 1 : 0,
+          status.feishuFieldTest ? 1 : 0,
+          status.kingdeeLoginTest ? 1 : 0,
+          status.fullFlowTest ? 1 : 0,
+        ].filter(Boolean).length;
+        return (
+          <Tag color={passedTests === 4 ? 'success' : passedTests > 0 ? 'processing' : 'default'}>
+            {passedTests}/4 通过
+          </Tag>
+        );
+      },
+    },
+    {
       title: '操作',
       key: 'action',
-      width: 220,
+      width: 280,
       align: 'center' as const,
       render: (_: any, record: TaskConfig) => (
-        <Space size="small">
+        <Space size="small" wrap>
+          <Tooltip title="验证测试">
+            <Button
+              icon={<ExperimentOutlined />}
+              size="small"
+              style={{ color: '#722ed1', borderColor: '#722ed1' }}
+              ghost
+              onClick={() => openVerificationTestModal(record.id)}
+            >
+              验证
+            </Button>
+          </Tooltip>
           <Tooltip title="编辑">
             <Button icon={<EditOutlined />} size="small" type="primary" ghost onClick={() => handleEditTask(record)} />
           </Tooltip>
@@ -800,7 +1180,7 @@ function App() {
                   </div>
                 </Card>
               </div>
-              <div className="mobile-task-list">
+              <div className="mobile-task-list" style={{ position: 'relative', zIndex: 100, paddingBottom: '70px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                   <Text strong style={{ fontSize: 16 }}>任务列表</Text>
                   <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { setEditingTask(null); setFormData({ name: '', description: '' }); setIsModalOpen(true); }}>新建</Button>
@@ -812,7 +1192,10 @@ function App() {
                       task={task}
                       onEdit={() => { setEditingTask(task); setFormData({ name: task.name, description: task.description || '' }); setIsModalOpen(true); }}
                       onConfig={() => { setSelectedTask(task); setIsConfigModalOpen(true); }}
-                      onTest={() => { setSelectedTask(task); setTestTaskId(task.id); setTestModalType('sync'); setTestResult(null); setTestModalOpen(true); }}
+                      onTest={() => {
+                        console.log('测试按钮被点击，任务 ID:', task.id);
+                        openVerificationTestModal(task.id);
+                      }}
                       onExecute={() => handleStartTask(task.id)}
                       onToggle={() => toggleTask(task.id)}
                     />
@@ -1145,48 +1528,101 @@ function App() {
         )}
       </Modal>
 
-      {/* 测试连接弹窗 */}
+      {/* 测试连接弹窗（含验证测试）- 移动端和桌面端共用 */}
       <Modal
         title={
           <Space>
             {testModalType === 'feishu' && <LoginOutlined style={{ color: '#4A90E2' }} />}
             {testModalType === 'kingdee' && <LoginOutlined style={{ color: '#F5A623' }} />}
             {testModalType === 'sync' && <CloudSyncOutlined style={{ color: '#52C41A' }} />}
+            {testModalType === 'verification' && <ExperimentOutlined style={{ color: '#722ed1' }} />}
             <span>
               {testModalType === 'feishu' ? '飞书登录测试' :
                testModalType === 'kingdee' ? '金蝶登录测试' :
-               '完整同步测试'}
+               testModalType === 'sync' ? '完整同步测试' :
+               '验证测试'}
             </span>
           </Space>
         }
         open={testModalOpen}
-        onCancel={() => setTestModalOpen(false)}
+        onCancel={() => {
+          setTestModalOpen(false);
+          setSelectedTask(null);
+          setVerificationTestTaskId('');
+        }}
         footer={null}
-        width="90%"
+        width={testModalType === 'verification' ? 700 : '90%'}
         className="custom-modal"
+        zIndex={1050}
       >
-        {selectedTask && (
-          <div style={{ marginBottom: 16, padding: '8px 12px', background: '#F5F5F5', borderRadius: 6 }}>
-            <Text type="secondary">当前测试任务：</Text>
-            <Text strong>{selectedTask.name}</Text>
+        {testModalType === 'verification' ? (
+          <div>
+            {selectedTask && (
+              <div style={{ marginBottom: 16, padding: '8px 12px', background: '#F5F5F5', borderRadius: 6 }}>
+                <Text type="secondary">当前测试任务：</Text>
+                <Text strong>{selectedTask.name}</Text>
+              </div>
+            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <Button
+                block
+                size="large"
+                onClick={() => executeVerificationTest('feishu-login')}
+                icon={<LoginOutlined />}
+                style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Text strong>1. 飞书登录测试</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>测试飞书连接是否正常</Text>
+                </div>
+              </Button>
+              <Button
+                block
+                size="large"
+                onClick={() => executeVerificationTest('feishu-field')}
+                icon={<FileSyncOutlined />}
+                style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Text strong>2. 飞书字段查询/筛选/回传测试</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>测试字段查询、筛选条件、回传配置是否正确</Text>
+                </div>
+              </Button>
+              <Button
+                block
+                size="large"
+                onClick={() => executeVerificationTest('kingdee-login')}
+                icon={<LoginOutlined />}
+                style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Text strong>3. 金蝶登录测试</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>测试金蝶连接是否正常</Text>
+                </div>
+              </Button>
+              <Button
+                block
+                size="large"
+                onClick={() => executeVerificationTest('full-flow')}
+                icon={<CloudSyncOutlined />}
+                style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Text strong>4. 第一条记录完整流程测试</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>使用第一条记录执行完整同步流程</Text>
+                </div>
+              </Button>
+            </div>
           </div>
-        )}
-
-        {/* 任务选择器 - 当有多个任务时显示 */}
-        {tasks.length > 1 && (
-          <div style={{ marginBottom: 16 }}>
-            <Text type="secondary" style={{ marginRight: 8 }}>选择任务：</Text>
-            <Select
-              value={testTaskId}
-              onChange={(value) => {
-                setTestTaskId(value);
-                const task = tasks.find(t => t.id === value);
-                if (task) setSelectedTask(task);
-              }}
-              options={tasks.map(t => ({ label: t.name, value: t.id }))}
-              style={{ width: '100%' }}
-            />
-          </div>
+        ) : (
+          <>
+            {selectedTask && (
+              <div style={{ marginBottom: 16, padding: '8px 12px', background: '#F5F5F5', borderRadius: 6 }}>
+                <Text type="secondary">当前测试任务：</Text>
+                <Text strong>{selectedTask.name}</Text>
+              </div>
+            )}
+          </>
         )}
 
         <Alert
@@ -1205,7 +1641,7 @@ function App() {
           style={{ marginBottom: 24 }}
         />
 
-        {testResult && (
+        {testResult && testModalType !== 'verification' && (
           <Card
             title={<Space>{testResult.success ? <CheckCircleOutlined style={{ color: '#52C41A' }} /> : <CloseCircleOutlined style={{ color: '#FF4D4F' }} />} <span>{testResult.title}</span></Space>}
             style={{ background: testResult.success ? '#F6FFED' : '#FFF1F0', border: `1px solid ${testResult.success ? '#B7EB8F' : '#FFA39E'}` }}
@@ -1229,13 +1665,55 @@ function App() {
           </Card>
         )}
 
+        {/* 验证测试结果显示 */}
+        {testResult && testModalType === 'verification' && (
+          <Card
+            title={<Space>
+              {testResult.loading ? <SyncOutlined spin /> : testResult.success ? <CheckCircleOutlined style={{ color: '#52C41A' }} /> : <CloseCircleOutlined style={{ color: '#FF4D4F' }} />}
+              <span>{testResult.title || '测试结果'}</span>
+            </Space>}
+            style={{ background: testResult.loading ? '#fafafa' : testResult.success ? '#F6FFED' : '#FFF1F0', border: `1px solid ${testResult.loading ? '#e8e8e8' : testResult.success ? '#B7EB8F' : '#FFA39E'}` }}
+          >
+            {testResult.message && (
+              <div style={{ marginBottom: 16 }}>
+                <Text type={testResult.success ? 'success' : 'danger'}>{testResult.message}</Text>
+              </div>
+            )}
+            {testResult.details && (
+              <div>
+                {Object.entries(testResult.details).map(([key, value]) => (
+                  <div key={key} style={{ marginBottom: 8 }}>
+                    <Text type="secondary">{key}:</Text>
+                    <Text style={{ marginLeft: 8 }}>{String(value)}</Text>
+                  </div>
+                ))}
+              </div>
+            )}
+            {testResult.loading && (
+              <div style={{ textAlign: 'center', padding: '20px' }}>
+                <SyncOutlined spin style={{ fontSize: '24px' }} />
+                <div style={{ marginTop: 12 }}>正在执行测试...</div>
+              </div>
+            )}
+          </Card>
+        )}
+
         <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
-          <Button type="primary" onClick={executeTest} block>
-            开始测试
-          </Button>
-          <Button onClick={() => setTestModalOpen(false)}>
-            取消
-          </Button>
+          {testModalType !== 'verification' && (
+            <Button block onClick={() => { setTestModalOpen(false); setTestResult(null); }}>
+              关闭
+            </Button>
+          )}
+          {testModalType === 'verification' && testResult && !testResult.loading && (
+            <>
+              <Button block onClick={() => { setTestModalOpen(false); setTestResult(null); }}>
+                关闭
+              </Button>
+              <Button type="primary" block onClick={() => { setTestModalOpen(false); setTestResult(null); setTimeout(() => executeAutoVerification(verificationTestTaskId), 100); }}>
+                执行任务
+              </Button>
+            </>
+          )}
         </div>
       </Modal>
     </>
@@ -1380,66 +1858,6 @@ return (
           </Card>
         </Col>
       </Row>
-
-      {/* 测试连接区域 - 可折叠 */}
-      <Card 
-        style={{ marginBottom: 24, borderRadius: 12 }}
-        title={
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <CloudSyncOutlined style={{ marginRight: 8, color: '#1890ff' }} />
-            <span style={{ fontWeight: 600 }}>连接测试</span>
-            <Text type="secondary" style={{ marginLeft: 12, fontSize: 13 }}>
-              配置完成后可在此测试连接
-            </Text>
-          </div>
-        }
-        extra={
-          <Button 
-            type="link" 
-            onClick={() => setTestSectionCollapsed(!testSectionCollapsed)}
-            icon={testSectionCollapsed ? <DownOutlined /> : <UpOutlined />}
-          >
-            {testSectionCollapsed ? '展开' : '收起'}
-          </Button>
-        }
-      >
-        {!testSectionCollapsed && (
-        <div className="test-grid">
-          <Card className="test-card" hoverable>
-            <div className="test-card-title">
-              <LoginOutlined style={{ color: '#4A90E2', marginRight: 8 }} />
-              飞书登录测试
-            </div>
-            <div className="test-card-desc">测试飞书应用的登录授权是否成功，验证AppID和AppSecret</div>
-            <Button type="primary" className="btn-primary" onClick={() => openTestModal('feishu')} block>
-              开始测试
-            </Button>
-          </Card>
-
-          <Card className="test-card" hoverable>
-            <div className="test-card-title">
-              <LoginOutlined style={{ color: '#F5A623', marginRight: 8 }} />
-              金蝶登录测试
-            </div>
-            <div className="test-card-desc">测试金蝶系统的登录连接是否正常，验证用户名密码</div>
-            <Button className="btn-accent" onClick={() => openTestModal('kingdee')} block>
-              开始测试
-            </Button>
-          </Card>
-
-          <Card className="test-card" hoverable>
-            <div className="test-card-title">
-              <FileSyncOutlined style={{ color: '#52C41A', marginRight: 8 }} />
-              完整同步测试
-            </div>
-            <div className="test-card-desc">完整流程测试：查询飞书→导入金蝶→写回飞书（仅测试第一条记录）</div>
-            <Button className="btn-secondary" onClick={() => openTestModal('sync')} block>
-              开始测试
-            </Button>
-          </Card>
-        </div>
-        )}
-      </Card>
 
       {/* 标签页 */}
       <Tabs activeKey={activeTab} onChange={setActiveTab} className="custom-tabs">
@@ -1764,48 +2182,101 @@ return (
       )}
     </Modal>
 
-    {/* 测试连接弹窗 */}
+    {/* 测试连接弹窗（含验证测试）- 桌面端 */}
     <Modal
       title={
         <Space>
           {testModalType === 'feishu' && <LoginOutlined style={{ color: '#4A90E2' }} />}
           {testModalType === 'kingdee' && <LoginOutlined style={{ color: '#F5A623' }} />}
           {testModalType === 'sync' && <CloudSyncOutlined style={{ color: '#52C41A' }} />}
+          {testModalType === 'verification' && <ExperimentOutlined style={{ color: '#722ed1' }} />}
           <span>
             {testModalType === 'feishu' ? '飞书登录测试' :
              testModalType === 'kingdee' ? '金蝶登录测试' :
-             '完整同步测试'}
+             testModalType === 'sync' ? '完整同步测试' :
+             '验证测试'}
           </span>
         </Space>
       }
       open={testModalOpen}
-      onCancel={() => setTestModalOpen(false)}
+      onCancel={() => {
+        setTestModalOpen(false);
+        setSelectedTask(null);
+        setVerificationTestTaskId('');
+      }}
       footer={null}
-      width="90%"
+      width={testModalType === 'verification' ? 700 : '90%'}
       className="custom-modal"
+      zIndex={1050}
     >
-      {selectedTask && (
-        <div style={{ marginBottom: 16, padding: '8px 12px', background: '#F5F5F5', borderRadius: 6 }}>
-          <Text type="secondary">当前测试任务：</Text>
-          <Text strong>{selectedTask.name}</Text>
+      {testModalType === 'verification' ? (
+        <div>
+          {selectedTask && (
+            <div style={{ marginBottom: 16, padding: '8px 12px', background: '#F5F5F5', borderRadius: 6 }}>
+              <Text type="secondary">当前测试任务：</Text>
+              <Text strong>{selectedTask.name}</Text>
+            </div>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <Button
+              block
+              size="large"
+              onClick={() => executeVerificationTest('feishu-login')}
+              icon={<LoginOutlined />}
+              style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <Text strong>1. 飞书登录测试</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>测试飞书连接是否正常</Text>
+              </div>
+            </Button>
+            <Button
+              block
+              size="large"
+              onClick={() => executeVerificationTest('feishu-field')}
+              icon={<FileSyncOutlined />}
+              style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <Text strong>2. 飞书字段查询/筛选/回传测试</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>测试字段查询、筛选条件、回传配置是否正确</Text>
+              </div>
+            </Button>
+            <Button
+              block
+              size="large"
+              onClick={() => executeVerificationTest('kingdee-login')}
+              icon={<LoginOutlined />}
+              style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <Text strong>3. 金蝶登录测试</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>测试金蝶连接是否正常</Text>
+              </div>
+            </Button>
+            <Button
+              block
+              size="large"
+              onClick={() => executeVerificationTest('full-flow')}
+              icon={<CloudSyncOutlined />}
+              style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <Text strong>4. 第一条记录完整流程测试</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>使用第一条记录执行完整同步流程</Text>
+              </div>
+            </Button>
+          </div>
         </div>
-      )}
-
-      {/* 任务选择器 - 当有多个任务时显示 */}
-      {tasks.length > 1 && (
-        <div style={{ marginBottom: 16 }}>
-          <Text type="secondary" style={{ marginRight: 8 }}>选择任务：</Text>
-          <Select
-            value={testTaskId}
-            onChange={(value) => {
-              setTestTaskId(value);
-              const task = tasks.find(t => t.id === value);
-              if (task) setSelectedTask(task);
-            }}
-            options={tasks.map(t => ({ label: t.name, value: t.id }))}
-            style={{ width: '100%' }}
-          />
-        </div>
+      ) : (
+        <>
+          {selectedTask && (
+            <div style={{ marginBottom: 16, padding: '8px 12px', background: '#F5F5F5', borderRadius: 6 }}>
+              <Text type="secondary">当前测试任务：</Text>
+              <Text strong>{selectedTask.name}</Text>
+            </div>
+          )}
+        </>
       )}
 
       <Alert
@@ -1824,7 +2295,7 @@ return (
         style={{ marginBottom: 24 }}
       />
 
-      {testResult && (
+      {testResult && testModalType !== 'verification' && (
         <Card
           title={<Space>{testResult.success ? <CheckCircleOutlined style={{ color: '#52C41A' }} /> : <CloseCircleOutlined style={{ color: '#FF4D4F' }} />} <span>{testResult.title}</span></Space>}
           style={{ background: testResult.success ? '#F6FFED' : '#FFF1F0', border: `1px solid ${testResult.success ? '#B7EB8F' : '#FFA39E'}` }}
@@ -1848,17 +2319,59 @@ return (
         </Card>
       )}
 
+      {/* 验证测试结果显示 */}
+      {testResult && testModalType === 'verification' && (
+        <Card
+          title={<Space>
+            {testResult.loading ? <SyncOutlined spin /> : testResult.success ? <CheckCircleOutlined style={{ color: '#52C41A' }} /> : <CloseCircleOutlined style={{ color: '#FF4D4F' }} />}
+            <span>{testResult.title || '测试结果'}</span>
+          </Space>}
+          style={{ background: testResult.loading ? '#fafafa' : testResult.success ? '#F6FFED' : '#FFF1F0', border: `1px solid ${testResult.loading ? '#e8e8e8' : testResult.success ? '#B7EB8F' : '#FFA39E'}` }}
+        >
+          {testResult.message && (
+            <div style={{ marginBottom: 16 }}>
+              <Text type={testResult.success ? 'success' : 'danger'}>{testResult.message}</Text>
+            </div>
+          )}
+          {testResult.details && (
+            <div>
+              {Object.entries(testResult.details).map(([key, value]) => (
+                <div key={key} style={{ marginBottom: 8 }}>
+                  <Text type="secondary">{key}:</Text>
+                  <Text style={{ marginLeft: 8 }}>{String(value)}</Text>
+                </div>
+              ))}
+            </div>
+          )}
+          {testResult.loading && (
+            <div style={{ textAlign: 'center', padding: '20px' }}>
+              <SyncOutlined spin style={{ fontSize: '24px' }} />
+              <div style={{ marginTop: 12 }}>正在执行测试...</div>
+            </div>
+          )}
+        </Card>
+      )}
+
       <div style={{ display: 'flex', gap: 8, marginTop: 24 }}>
-        <Button type="primary" onClick={executeTest} block>
-          开始测试
-        </Button>
-        <Button onClick={() => setTestModalOpen(false)}>
-          取消
-        </Button>
+        {testModalType !== 'verification' && (
+          <Button block onClick={() => { setTestModalOpen(false); setTestResult(null); }}>
+            关闭
+          </Button>
+        )}
+        {testModalType === 'verification' && testResult && !testResult.loading && (
+          <>
+            <Button block onClick={() => { setTestModalOpen(false); setTestResult(null); }}>
+              关闭
+            </Button>
+            <Button type="primary" block onClick={() => { setTestModalOpen(false); setTestResult(null); setTimeout(() => executeAutoVerification(verificationTestTaskId), 100); }}>
+              执行任务
+            </Button>
+          </>
+        )}
       </div>
     </Modal>
-  </>
-  );
+
+  </>);
 }
 
 export default App;

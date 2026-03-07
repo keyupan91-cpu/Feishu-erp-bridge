@@ -3,6 +3,7 @@ import KingdeeService from './kingdeeService';
 import type { TaskConfig, TaskInstance, TaskLog, WebAPILog } from '../types';
 import { TaskStatus } from '../types';
 import { useAccountStore } from '../stores/accountStore';
+import { formatDate, extractTextValue, FeishuFieldType } from '../utils/fieldTypeUtils';
 
 // 任务执行器类
 export class TaskExecutor {
@@ -195,6 +196,7 @@ export class TaskExecutor {
       const recordId = item.record_id;
       const fields = item.fields || {};
       let finalData: Record<string, any> = {};
+      let writeBackResult: Record<string, any> | null = null;
 
       try {
         const formattedData = this.formatDataForKingdee(fields);
@@ -207,6 +209,11 @@ export class TaskExecutor {
 
         const result = await this.kingdeeService.saveData(formId, finalData);
 
+        successCount++;
+        // 先执行回写，获取回写数据（传入金蝶响应）
+        writeBackResult = await this.handleWriteBack(recordId, 'success', '同步成功', result);
+
+        // 再记录 WebAPI 日志，包含回写数据
         const webApiLog: Omit<WebAPILog, 'id'> = {
           recordId: recordId || ('record_' + index),
           timestamp: new Date().toISOString(),
@@ -214,16 +221,19 @@ export class TaskExecutor {
           feishuData: fields,
           requestData: finalData,
           responseData: result,
+          writeBackData: writeBackResult || {},
+          writeBackSuccess: writeBackResult !== null,
+          writeBackError: undefined,
         };
 
-        successCount++;
-        await this.handleWriteBack(recordId, 'success', '同步成功');
         await this.addWebApiLog(webApiLog as WebAPILog);
 
       } catch (err: any) {
         errorCount++;
-        await this.handleWriteBack(recordId, 'error', err.message);
+        // 先执行回写，获取回写数据（传入金蝶响应）
+        writeBackResult = await this.handleWriteBack(recordId, 'error', err.message, err.responseData);
 
+        // 再记录 WebAPI 日志，包含回写数据
         const webApiLog: Omit<WebAPILog, 'id'> = {
           recordId: recordId || ('record_' + index),
           timestamp: new Date().toISOString(),
@@ -232,9 +242,9 @@ export class TaskExecutor {
           feishuData: fields,
           requestData: finalData || {},
           responseData: err.responseData || {},
-          writeBackData: {} as Record<string, any>,
+          writeBackData: writeBackResult || {},
           writeBackSuccess: false,
-          writeBackError: undefined,
+          writeBackError: writeBackResult ? undefined : err.message,
         };
         await this.addWebApiLog(webApiLog as WebAPILog);
         await this.addLog('error', '记录 ' + recordId + ' 导入失败：' + err.message);
@@ -272,15 +282,16 @@ export class TaskExecutor {
     return { successCount, errorCount };
   }
 
-  // 处理回写逻辑
+  // 处理回写逻辑 - 返回回写的数据
   private async handleWriteBack(
     recordId: string | undefined,
     source: 'success' | 'error',
-    message: string
-  ): Promise<void> {
+    message: string,
+    kingdeeResponse?: any // 金蝶响应数据
+  ): Promise<Record<string, any> | null> {
     const { tableId, writeBackFields = [] } = this.task.feishuConfig;
     if (!tableId || !recordId || writeBackFields.length === 0) {
-      return;
+      return null;
     }
 
     const writeBackData: Record<string, any> = {};
@@ -289,6 +300,24 @@ export class TaskExecutor {
         writeBackData[field.fieldName] = source === 'success' ? '同步成功' : '同步失败';
       } else if (field.source === 'error') {
         writeBackData[field.fieldName] = source === 'success' ? '同步成功' : (message || '同步失败');
+      } else if (field.source === 'response' && kingdeeResponse) {
+        // 从金蝶响应中提取数据
+        if (field.jsonPath) {
+          // 支持简单的 JSON 路径，如：Result.ResponseStatus.Errors[0].Message
+          const keys = field.jsonPath.replace(/\[(\d+)\]/g, '.$1').split('.');
+          let value: any = kingdeeResponse;
+          for (const key of keys) {
+            if (value === null || value === undefined) {
+              value = undefined;
+              break;
+            }
+            value = value[key];
+          }
+          writeBackData[field.fieldName] = value !== undefined ? value : '无法提取';
+        } else {
+          // 没有指定 JSON 路径，返回整个响应
+          writeBackData[field.fieldName] = JSON.stringify(kingdeeResponse);
+        }
       }
     });
 
@@ -296,10 +325,14 @@ export class TaskExecutor {
       try {
         await this.feishuService.writeBackData(tableId, recordId, writeBackData);
         await this.addLog('info', '记录 ' + recordId + ' 状态已回写到飞书');
+        return writeBackData; // 返回回写的数据
       } catch (writeError: any) {
         await this.addLog('warn', '回写状态到飞书失败：' + writeError.message);
+        return writeBackData; // 即使失败也返回回写的数据
       }
     }
+
+    return null;
   }
 
   // 提取飞书字段的实际值（处理多行文本等复杂类型）
@@ -347,6 +380,67 @@ export class TaskExecutor {
     return fieldValue;
   }
 
+  // 根据处理类型格式化字段值
+  private formatFieldValue(fieldValue: any, param: import('../types').FeishuFieldParam, sourceFieldType?: number): any {
+    const processType = param.processType || 'auto';
+
+    // 自动检测处理类型
+    let effectiveType = processType;
+    if (processType === 'auto' && sourceFieldType !== undefined) {
+      // 根据飞书字段类型自动检测
+      if (sourceFieldType === FeishuFieldType.NUMBER) {
+        effectiveType = 'number';
+      } else if (sourceFieldType === FeishuFieldType.DATE ||
+                 sourceFieldType === FeishuFieldType.CREATED_TIME ||
+                 sourceFieldType === FeishuFieldType.MODIFIED_TIME) {
+        effectiveType = 'datetime';
+      } else if (sourceFieldType === FeishuFieldType.MULTI_SELECT ||
+                 sourceFieldType === FeishuFieldType.PERSON ||
+                 sourceFieldType === FeishuFieldType.GROUP_CHAT) {
+        effectiveType = processType === 'auto' ? 'text' : processType;
+      }
+    }
+
+    // 根据处理类型格式化
+    switch (effectiveType) {
+      case 'number':
+        if (typeof fieldValue === 'number') {
+          const decimalPlaces = param.decimalPlaces ?? 2;
+          return Number(fieldValue.toFixed(decimalPlaces));
+        }
+        // 尝试转换为数字
+        const numValue = Number(fieldValue);
+        if (!isNaN(numValue)) {
+          const decimalPlaces = param.decimalPlaces ?? 2;
+          return Number(numValue.toFixed(decimalPlaces));
+        }
+        return fieldValue;
+
+      case 'date':
+      case 'datetime':
+        return formatDate(fieldValue, param.dateFormat || 'YYYY-MM-DD');
+
+      case 'timestamp':
+        if (typeof fieldValue === 'number') {
+          return String(fieldValue);
+        }
+        if (typeof fieldValue === 'string') {
+          const parsed = Date.parse(fieldValue);
+          return isNaN(parsed) ? fieldValue : String(parsed);
+        }
+        return String(fieldValue);
+
+      case 'multiselect':
+      case 'person':
+        // 多选、人员字段：提取所有文本值，逗号分隔
+        return extractTextValue(fieldValue);
+
+      default:
+        // text、select、checkbox、phone 等：返回原始提取值
+        return fieldValue;
+    }
+  }
+
   // 格式化数据为金蝶格式
   private formatDataForKingdee(fields: Record<string, any>): Record<string, any> {
     const { fieldParams } = this.task.feishuConfig;
@@ -354,13 +448,18 @@ export class TaskExecutor {
 
     fieldParams.forEach(param => {
       const rawFieldValue = fields[param.fieldName];
-      const fieldValue = this.extractFeishuFieldValue(rawFieldValue);
+
+      // 如果有 sourceFieldType，使用配置的；否则尝试自动检测
+      const sourceFieldType = param.sourceFieldType;
+
+      // 提取原始值
+      let fieldValue = this.extractFeishuFieldValue(rawFieldValue);
+
+      // 根据处理类型格式化
+      fieldValue = this.formatFieldValue(fieldValue, param, sourceFieldType);
+
       if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
-        if (param.decimalPlaces !== undefined && typeof fieldValue === 'number') {
-          result[param.variableName] = Number(fieldValue.toFixed(param.decimalPlaces));
-        } else {
-          result[param.variableName] = fieldValue;
-        }
+        result[param.variableName] = fieldValue;
       }
     });
 

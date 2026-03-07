@@ -113,7 +113,7 @@ export function BottomNavBar({
           display: flex;
           align-items: flex-start;
           justify-content: space-around;
-          z-index: 1000;
+          z-index: 999;
           padding-top: 8px;
           padding-bottom: env(safe-area-inset-bottom, 0);
         }
