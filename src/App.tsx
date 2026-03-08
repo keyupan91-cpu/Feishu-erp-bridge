@@ -119,6 +119,7 @@ function App() {
   const [selectedWebApiLog, setSelectedWebApiLog] = useState<any>(null);
   const [loadedTaskLogs, setLoadedTaskLogs] = useState<any[]>([]); // 从 IndexedDB 加载的任务日志
   const [loadedWebApiLogs, setLoadedWebApiLogs] = useState<any[]>([]); // 从 IndexedDB 加载的 WebAPI 日志
+  const [loadedFullTaskLogs, setLoadedFullTaskLogs] = useState<any[]>([]); // 从 IndexedDB 加载的完整任务日志（用于详情弹窗）
   const [logsLoading, setLogsLoading] = useState(false);
   const [instanceLatestLogs, setInstanceLatestLogs] = useState<Map<string, { timestamp: string; message: string; level: string }>>(new Map());
   
@@ -541,16 +542,20 @@ function App() {
   };
 
   // 加载日志 - 从 IndexedDB 加载（全部存储，但只加载前 10 条用于显示）
-  const loadLogs = async (instanceId: string) => {
+  const loadLogs = async (instanceId: string, loadFull = false) => {
     setLogsLoading(true);
     try {
       const { logStorage } = await import('./services/logStorage');
+      const limit = loadFull ? 1000 : 10; // 加载完整日志时最多 1000 条
       const [taskLogs, webApiLogs] = await Promise.all([
-        logStorage.getTaskLogs(instanceId, { limit: 10, reverse: true }), // PC 端只显示前 10 条
-        logStorage.getWebApiLogs(instanceId, { limit: 10, reverse: true }), // PC 端只显示前 10 条
+        logStorage.getTaskLogs(instanceId, { limit, reverse: true }),
+        logStorage.getWebApiLogs(instanceId, { limit: loadFull ? 100 : 10, reverse: true }),
       ]);
-      setLoadedTaskLogs(taskLogs);
-      setLoadedWebApiLogs(webApiLogs);
+      setLoadedTaskLogs(taskLogs.slice(0, 10)); // PC 端主界面只显示前 10 条
+      setLoadedWebApiLogs(webApiLogs.slice(0, 10)); // PC 端主界面只显示前 10 条
+      if (loadFull) {
+        setLoadedFullTaskLogs(taskLogs); // 完整日志用于详情弹窗
+      }
     } catch (error: any) {
       message.error(`加载日志失败：${error.message}`);
     } finally {
@@ -585,10 +590,10 @@ function App() {
     }
   };
 
-  // 处理查看实例详情
+  // 处理查看实例详情 - 加载完整日志
   const handleViewInstance = (instance: TaskInstance) => {
     setSelectedInstance(instance);
-    loadLogs(instance.id); // 加载日志
+    loadLogs(instance.id, true); // 加载完整日志
   };
 
   // 处理清空执行记录
@@ -1117,7 +1122,7 @@ function App() {
                       taskName={task?.name}
                       onStop={() => handleStopTask(instance.id)}
                       onDelete={() => handleDeleteInstance(instance.id)}
-                      onViewLogs={() => { setSelectedInstance(instance); setShowWebApiLogs(true); loadLogs(instance.id); }}
+                      onViewLogs={() => { setSelectedInstance(instance); setShowWebApiLogs(true); loadLogs(instance.id, true); }}
                       latestLog={latestLog}
                     />
                   );
@@ -1943,6 +1948,7 @@ return (
         setSelectedInstance(null);
         setLoadedTaskLogs([]);
         setLoadedWebApiLogs([]);
+        setLoadedFullTaskLogs([]);
       }}
       footer={[
         <Button key="close" onClick={() => setSelectedInstance(null)}>
@@ -1994,26 +2000,26 @@ return (
 
           {/* 执行日志 */}
           <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>执行日志</div>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>执行日志（全部）</div>
             <div style={{
               background: '#fafafa',
               border: '1px solid #e8e8e8',
               borderRadius: 4,
               padding: 12,
-              maxHeight: 300,
+              maxHeight: 400,
               overflowY: 'auto',
               fontFamily: 'monospace',
               fontSize: 12,
             }}>
-              {loadedTaskLogs.length === 0 ? (
+              {loadedFullTaskLogs.length === 0 ? (
                 <Empty description="暂无日志" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
-                loadedTaskLogs.slice(0, 50).map((log: any, index: number) => (
+                loadedFullTaskLogs.map((log: any, index: number) => (
                   <div
                     key={index}
                     style={{
                       padding: '4px 0',
-                      borderBottom: index < 49 ? '1px solid #eee' : 'none',
+                      borderBottom: index < loadedFullTaskLogs.length - 1 ? '1px solid #eee' : 'none',
                       color: log.level === 'error' ? '#ff4d4f' :
                              log.level === 'warn' ? '#faad14' :
                              '#666',
