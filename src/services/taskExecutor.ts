@@ -3,6 +3,7 @@ import KingdeeService from './kingdeeService';
 import type { TaskConfig, TaskInstance, TaskLog, WebAPILog } from '../types';
 import { TaskStatus } from '../types';
 import { useAccountStore } from '../stores/accountStore';
+import { logStorage } from './logStorage';
 import { formatDate, extractTextValue, FeishuFieldType } from '../utils/fieldTypeUtils';
 
 // 任务执行器类
@@ -21,19 +22,23 @@ export class TaskExecutor {
     this.kingdeeService = new KingdeeService(task.kingdeeConfig);
   }
 
-  // 添加日志
+  // 添加日志 - 直接写入 IndexedDB，不占用内存
   private async addLog(level: 'info' | 'warn' | 'error', message: string) {
-    const log: Omit<TaskLog, 'id' | 'taskId'> = {
+    const log: Omit<TaskLog, 'id'> = {
+      instanceId: this.instance.id,
+      taskId: this.task.id,
       timestamp: new Date().toISOString(),
       level,
       message,
     };
-    await useAccountStore.getState().addTaskLog(this.instance.id, log as TaskLog);
+    // 直接写入 IndexedDB，不经过 Zustand Store
+    await logStorage.addTaskLog(this.instance.id, log);
   }
 
-  // 添加 WebAPI 日志
+  // 添加 WebAPI 日志 - 直接写入 IndexedDB，不占用内存
   private async addWebApiLog(log: WebAPILog) {
-    await useAccountStore.getState().addWebApiLog(this.instance.id, log);
+    // 直接写入 IndexedDB，不经过 Zustand Store
+    await logStorage.addWebApiLog(this.instance.id, log);
   }
 
   // 更新进度 - 只更新内存，不保存到服务器
@@ -150,9 +155,26 @@ export class TaskExecutor {
       // 替换字符串中的 {{variableName}} 占位符
       let result = obj;
       for (const [key, value] of Object.entries(replacement)) {
+        // 跳过空 key 的替换
+        if (!key || key.trim() === '') {
+          continue;
+        }
         const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
         result = result.replace(placeholder, String(value ?? ''));
       }
+      // 如果替换后整个字符串就是一个单独的值（没有引号包围），尝试转换为原始类型
+      // 例如："{{E}}" 替换后变成 "3000"，尝试转换为数字 3000
+      // 检查是否整个字符串就是由一个占位符替换而来（即替换后没有引号包围）
+      // 这里使用一个简单的方法：如果替换后的值看起来像数字或布尔值，尝试转换
+      if (/^-?\d+(\.\d+)?$/.test(result)) {
+        // 看起来像数字
+        const numValue = parseFloat(result);
+        if (!isNaN(numValue)) {
+          return numValue;
+        }
+      }
+      if (result === 'true') return true;
+      if (result === 'false') return false;
       return result;
     }
     if (Array.isArray(obj)) {
@@ -184,11 +206,14 @@ export class TaskExecutor {
     const executing: Promise<void>[] = [];
 
     let parsedTemplate: Record<string, any> | null = null;
+    let templateParseFailed = false;
     if (dataTemplate) {
       try {
         parsedTemplate = JSON.parse(dataTemplate);
-      } catch {
-        await this.addLog('warn', '数据模板解析失败，将使用原始数据');
+      } catch (parseError: any) {
+        // 模板解析失败是正常的，因为模板中包含占位符（如 {{A}}），在替换前不是有效的 JSON
+        // 只有当占位符都是数字/布尔值类型（未被引号包围）时，模板才是有效的 JSON
+        templateParseFailed = true;
       }
     }
 
@@ -201,10 +226,62 @@ export class TaskExecutor {
       try {
         const formattedData = this.formatDataForKingdee(fields);
         finalData = formattedData;
+
         if (parsedTemplate) {
-          // 先替换模板中的占位符，再合并格式化数据
+          // 模板解析成功：先替换模板中的占位符，再合并格式化数据
           const templateWithValues = this.replacePlaceholders(parsedTemplate, formattedData);
           finalData = { ...templateWithValues, ...formattedData };
+        } else if (templateParseFailed && dataTemplate) {
+          // 模板解析失败：使用原始模板字符串进行替换，然后尝试解析
+          let templateWithValues = dataTemplate;
+          for (const [key, value] of Object.entries(formattedData)) {
+            const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+            // 确保值是字符串或数字，避免 [object Object]
+            let stringValue = '';
+            if (typeof value === 'number' || typeof value === 'boolean') {
+              stringValue = String(value);
+            } else if (typeof value === 'object' && value !== null) {
+              // 如果是对象，尝试提取 text 属性
+              stringValue = value.text || value.value || String(value);
+            } else {
+              stringValue = String(value ?? '');
+            }
+            // 【关键修复】检查占位符是否被双引号包围，以决定如何处理转义
+            const hasQuotes = templateWithValues.match(new RegExp(`"\\{\\{${key}\\}\\}"`));
+
+            if (typeof value === 'number' || typeof value === 'boolean') {
+              // 数字和布尔值：直接替换，不需要引号
+              templateWithValues = templateWithValues.replace(placeholder, stringValue);
+            } else if (hasQuotes) {
+              // 字符串值且占位符被引号包围：只需要转义内容，不需要额外的引号
+              // JSON.stringify 会添加外层引号，需要移除（因为模板中已有引号）
+              const escaped = JSON.stringify(stringValue);
+              templateWithValues = templateWithValues.replace(placeholder, escaped.slice(1, -1));
+            } else {
+              // 字符串值但占位符没有被引号包围：需要完整的 JSON 字符串
+              templateWithValues = templateWithValues.replace(placeholder, JSON.stringify(stringValue));
+            }
+          }
+          // 尝试解析替换后的模板
+          try {
+            finalData = JSON.parse(templateWithValues);
+            // 验证解析后的数据是否包含必需的 Model 字段（金蝶要求）
+            if (!finalData.Model) {
+              await this.addLog('error', '记录 ' + recordId + ' 模板解析后缺少必需的 Model 字段');
+              // 尝试构造一个最小可用的 Model
+              finalData = {
+                Model: { ...formattedData }
+              };
+            }
+          } catch (e: any) {
+            await this.addLog('error', '记录 ' + recordId + ' 模板替换后解析失败：' + e.message);
+            await this.addLog('warn', '记录 ' + recordId + ' 将使用保底数据格式（仅包含格式化字段）');
+            // 【保底方案】解析失败时，至少使用格式化后的字段数据
+            // 这样可以确保有 Model 字段，虽然可能不完整，但比空数据好
+            finalData = {
+              Model: { ...formattedData }
+            };
+          }
         }
 
         const result = await this.kingdeeService.saveData(formId, finalData);
@@ -215,6 +292,7 @@ export class TaskExecutor {
 
         // 再记录 WebAPI 日志，包含回写数据
         const webApiLog: Omit<WebAPILog, 'id'> = {
+          instanceId: this.instance.id,
           recordId: recordId || ('record_' + index),
           timestamp: new Date().toISOString(),
           success: true,
@@ -235,6 +313,7 @@ export class TaskExecutor {
 
         // 再记录 WebAPI 日志，包含回写数据
         const webApiLog: Omit<WebAPILog, 'id'> = {
+          instanceId: this.instance.id,
           recordId: recordId || ('record_' + index),
           timestamp: new Date().toISOString(),
           success: false,
@@ -296,12 +375,53 @@ export class TaskExecutor {
 
     const writeBackData: Record<string, any> = {};
     writeBackFields.forEach(field => {
-      if (field.source === 'success') {
+      if (field.source === 'status') {
+        // 响应状态：成功返回"同步成功"，失败返回"同步失败"
         writeBackData[field.fieldName] = source === 'success' ? '同步成功' : '同步失败';
+      } else if (field.source === 'success') {
+        // 成功消息：只在成功时回传，失败时留空
+        if (source === 'success') {
+          if (field.jsonPath && kingdeeResponse) {
+            // 支持 JSON 路径提取，如：Result.Number
+            const keys = field.jsonPath.replace(/\[(\d+)\]/g, '.$1').split('.');
+            let value: any = kingdeeResponse;
+            for (const key of keys) {
+              if (value === null || value === undefined) {
+                value = undefined;
+                break;
+              }
+              value = value[key];
+            }
+            writeBackData[field.fieldName] = value !== undefined ? value : '无法提取';
+          } else {
+            // 没有 JSON 路径，返回成功消息
+            writeBackData[field.fieldName] = message || '同步成功';
+          }
+        }
+        // 失败时留空（不设置值）
       } else if (field.source === 'error') {
-        writeBackData[field.fieldName] = source === 'success' ? '同步成功' : (message || '同步失败');
+        // 错误消息：只在失败时回传，成功时留空
+        if (source === 'error') {
+          if (field.jsonPath && kingdeeResponse) {
+            // 支持 JSON 路径提取，如：Result.ResponseStatus.Errors[0].Message
+            const keys = field.jsonPath.replace(/\[(\d+)\]/g, '.$1').split('.');
+            let value: any = kingdeeResponse;
+            for (const key of keys) {
+              if (value === null || value === undefined) {
+                value = undefined;
+                break;
+              }
+              value = value[key];
+            }
+            writeBackData[field.fieldName] = value !== undefined ? value : '无法提取';
+          } else {
+            // 没有 JSON 路径，返回错误消息
+            writeBackData[field.fieldName] = message || '同步失败';
+          }
+        }
+        // 成功时留空（不设置值）
       } else if (field.source === 'response' && kingdeeResponse) {
-        // 从金蝶响应中提取数据
+        // 完整响应：无论成功失败都回传完整内容
         if (field.jsonPath) {
           // 支持简单的 JSON 路径，如：Result.ResponseStatus.Errors[0].Message
           const keys = field.jsonPath.replace(/\[(\d+)\]/g, '.$1').split('.');
@@ -447,6 +567,11 @@ export class TaskExecutor {
     const result: Record<string, any> = {};
 
     fieldParams.forEach(param => {
+      // 跳过 variableName 为空的字段参数
+      if (!param.variableName || param.variableName.trim() === '') {
+        return;
+      }
+
       const rawFieldValue = fields[param.fieldName];
 
       // 如果有 sourceFieldType，使用配置的；否则尝试自动检测

@@ -319,6 +319,14 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
       console.error('删除执行记录文件失败:', error);
     }
 
+    // 删除 IndexedDB 中的日志
+    try {
+      const { logStorage } = await import('../services/logStorage');
+      await logStorage.deleteInstanceLogs(id);
+    } catch (error) {
+      console.error('删除 IndexedDB 日志失败:', error);
+    }
+
     // 更新前端状态
     set((state) => ({
       taskInstances: state.taskInstances.filter((i) => i.id !== id),
@@ -326,36 +334,16 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
     await get().saveToServer();
   },
 
-  // 添加任务日志 - 批量保存，限制单实例日志数量
+  // 添加任务日志 - 直接写入 IndexedDB，不占用内存
   addTaskLog: async (instanceId, log) => {
-    set((state) => ({
-      taskInstances: state.taskInstances.map((i) => {
-        if (i.id !== instanceId) return i;
-        // 限制单实例日志数量为 1000 条，超出则移除最早的
-        const newLogs = [...i.logs, log];
-        if (newLogs.length > 1000) {
-          newLogs.shift(); // 移除最早的日志
-        }
-        return { ...i, logs: newLogs };
-      }),
-    }));
-    // 不立即保存，由任务完成时统一保存
+    const { logStorage } = await import('../services/logStorage');
+    await logStorage.addTaskLog(instanceId, log);
   },
 
-  // 添加 WebAPI 日志 - 批量保存，限制单实例日志数量
+  // 添加 WebAPI 日志 - 直接写入 IndexedDB，不占用内存
   addWebApiLog: async (instanceId, log) => {
-    set((state) => ({
-      taskInstances: state.taskInstances.map((i) => {
-        if (i.id !== instanceId) return i;
-        // 限制单实例 WebAPI 日志数量为 500 条
-        const newLogs = [...i.webApiLogs, log];
-        if (newLogs.length > 500) {
-          newLogs.shift();
-        }
-        return { ...i, webApiLogs: newLogs };
-      }),
-    }));
-    // 不立即保存，由任务完成时统一保存
+    const { logStorage } = await import('../services/logStorage');
+    await logStorage.addWebApiLog(instanceId, log);
   },
 
   // 开始任务

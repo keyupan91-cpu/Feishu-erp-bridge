@@ -35,6 +35,7 @@ export interface FeishuFieldParam {
 
 // 筛选条件
 export interface FilterCondition {
+  id: string;
   fieldName: string;
   operator: 'eq' | 'ne' | 'contains' | 'notContains' | 'isEmpty' | 'isNotEmpty';
   value?: string;
@@ -44,7 +45,7 @@ export interface FilterCondition {
 export interface WriteBackField {
   id: string;
   fieldName: string; // 飞书字段名
-  source: 'success' | 'error' | 'response'; // 数据来源：成功/错误/完整响应
+  source: 'success' | 'error' | 'response' | 'status'; // 数据来源：成功消息/错误消息/完整响应/响应状态
   jsonPath?: string; // JSON路径，用于从响应中提取特定字段
 }
 
@@ -94,6 +95,7 @@ export interface TaskConfig {
 // 任务执行记录
 export interface TaskLog {
   id: string;
+  instanceId: string; // 任务实例 ID
   taskId: string;
   timestamp: string;
   level: 'info' | 'warn' | 'error';
@@ -104,6 +106,7 @@ export interface TaskLog {
 // WebAPI 调用日志
 export interface WebAPILog {
   id: string;
+  instanceId: string; // 任务实例 ID
   timestamp: string;
   recordId: string; // 飞书记录ID
   feishuData?: any; // 飞书原始数据
@@ -123,8 +126,8 @@ export interface TaskInstance {
   status: TaskStatus;
   startTime?: string;
   endTime?: string;
-  logs: TaskLog[];
-  webApiLogs: WebAPILog[]; // WebAPI调用日志
+  logs: [];
+  webApiLogs: []; // 日志已移除，存储在 IndexedDB 中 // WebAPI调用日志
   progress: number;
   totalCount?: number;
   successCount?: number;

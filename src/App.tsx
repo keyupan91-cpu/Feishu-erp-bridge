@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Tabs,
   Button,
@@ -97,6 +97,13 @@ function App() {
 
   // 本地状态
   const [activeTab, setActiveTab] = useState('tasks');
+
+  // 当切换到监控标签页时，加载所有实例的最新日志
+  useEffect(() => {
+    if (activeTab === 'monitoring') {
+      loadAllInstanceLogs();
+    }
+  }, [activeTab, taskInstances.length]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<TaskConfig | null>(null);
@@ -104,13 +111,16 @@ function App() {
   const [selectedInstance, setSelectedInstance] = useState<TaskInstance | null>(null);
   const [showGuide, setShowGuide] = useState(true);
   const [formData, setFormData] = useState({ name: '', description: '' });
-  const [testTaskId, setTestTaskId] = useState<string>('');
   const [testModalOpen, setTestModalOpen] = useState(false);
   const [testModalType, setTestModalType] = useState<'feishu' | 'kingdee' | 'sync' | 'verification'>('feishu');
   const [testResult, setTestResult] = useState<any>(null);
   const [verificationTestTaskId, setVerificationTestTaskId] = useState<string>(''); // 验证测试的任务 ID
   const [showWebApiLogs, setShowWebApiLogs] = useState(false);
   const [selectedWebApiLog, setSelectedWebApiLog] = useState<any>(null);
+  const [loadedTaskLogs, setLoadedTaskLogs] = useState<any[]>([]); // 从 IndexedDB 加载的任务日志
+  const [loadedWebApiLogs, setLoadedWebApiLogs] = useState<any[]>([]); // 从 IndexedDB 加载的 WebAPI 日志
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [instanceLatestLogs, setInstanceLatestLogs] = useState<Map<string, { timestamp: string; message: string; level: string }>>(new Map());
   
   // 处理登录成功
   const handleLoginSuccess = () => {
@@ -530,9 +540,55 @@ function App() {
     });
   };
 
+  // 加载日志 - 从 IndexedDB 加载
+  const loadLogs = async (instanceId: string) => {
+    setLogsLoading(true);
+    try {
+      const { logStorage } = await import('./services/logStorage');
+      const [taskLogs, webApiLogs] = await Promise.all([
+        logStorage.getTaskLogs(instanceId, { limit: 100, reverse: true }),
+        logStorage.getWebApiLogs(instanceId, { limit: 10, reverse: true }), // 只加载前 10 条
+      ]);
+      setLoadedTaskLogs(taskLogs);
+      setLoadedWebApiLogs(webApiLogs);
+    } catch (error: any) {
+      message.error(`加载日志失败：${error.message}`);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  // 加载所有实例的最新日志（用于移动端卡片显示）
+  const loadAllInstanceLogs = async () => {
+    try {
+      const { logStorage } = await import('./services/logStorage');
+      const logsMap = new Map<string, { timestamp: string; message: string; level: string }>();
+
+      await Promise.all(taskInstances.map(async (instance) => {
+        try {
+          const logs = await logStorage.getTaskLogs(instance.id, { limit: 1 });
+          if (logs.length > 0) {
+            logsMap.set(instance.id, {
+              timestamp: logs[0].timestamp,
+              message: logs[0].message,
+              level: logs[0].level,
+            });
+          }
+        } catch (e) {
+          // 忽略单个实例的加载错误
+        }
+      }));
+
+      setInstanceLatestLogs(logsMap);
+    } catch (error) {
+      console.error('加载所有实例日志失败:', error);
+    }
+  };
+
   // 处理查看实例详情
   const handleViewInstance = (instance: TaskInstance) => {
     setSelectedInstance(instance);
+    loadLogs(instance.id); // 加载日志
   };
 
   // 处理清空执行记录
@@ -661,170 +717,6 @@ function App() {
     }
   };
 
-  // 执行测试
-  const executeTest = async () => {
-    const task = tasks.find((t) => t.id === testTaskId);
-    if (!task) {
-      message.error('请选择一个任务');
-      return;
-    }
-
-    setTestResult(null);
-
-    try {
-      if (testModalType === 'feishu') {
-        if (!task.feishuConfig.appId || !task.feishuConfig.appSecret) {
-          throw new Error('请先在任务配置中填写飞书AppID和AppSecret');
-        }
-        const feishuService = new FeishuService(task.feishuConfig);
-        const token = await feishuService.getToken();
-        setTestResult({
-          success: true,
-          type: 'feishu',
-          title: '飞书登录测试成功',
-          details: {
-            '应用ID': task.feishuConfig.appId,
-            '应用Token': task.feishuConfig.appToken,
-            '访问令牌': token.slice(0, 20) + '...',
-          },
-        });
-      } else if (testModalType === 'kingdee') {
-        if (!task.kingdeeConfig.loginParams.username || !task.kingdeeConfig.loginParams.password) {
-          throw new Error('请先在任务配置中填写金蝶用户名和密码');
-        }
-        const kingdeeService = new KingdeeService(task.kingdeeConfig);
-        const result = await kingdeeService.testConnection();
-        setTestResult({
-          success: result.success,
-          type: 'kingdee',
-          title: result.success ? '金蝶登录测试成功' : '金蝶登录测试失败',
-          message: result.message,
-          details: {
-            '服务器地址': task.kingdeeConfig.loginParams.baseUrl,
-            '用户名': task.kingdeeConfig.loginParams.username,
-            '账套ID': task.kingdeeConfig.loginParams.dbId || '-',
-          },
-        });
-      } else if (testModalType === 'sync') {
-        // 完整同步测试 - 只测试第一条记录
-        if (!task.feishuConfig.tableId) {
-          throw new Error('请先在任务配置中填写飞书表格ID');
-        }
-        if (!task.kingdeeConfig.formId) {
-          throw new Error('请先在任务配置中填写金蝶表单ID');
-        }
-
-        const feishuService = new FeishuService(task.feishuConfig);
-        await feishuService.getToken();
-
-        // 获取第一条记录 - 不指定 field_names，让飞书返回所有字段用于筛选
-        const tableData = await feishuService.getTableData(
-          task.feishuConfig.tableId,
-          task.feishuConfig.viewId,
-          task.feishuConfig.filterConditions,
-          []  // 不指定字段名，获取所有字段
-        );
-
-        if (!tableData.data?.items || tableData.data.items.length === 0) {
-          throw new Error('飞书表格中没有符合条件的记录');
-        }
-
-        const firstRecord = tableData.data.items[0];
-        const recordId = firstRecord.record_id;
-        const fields = firstRecord.fields || {};
-
-        // 提取飞书字段的实际值（处理复杂类型）
-        const extractFeishuFieldValue = (fieldValue: any): any => {
-          if (fieldValue === null || fieldValue === undefined) return '';
-          if (typeof fieldValue === 'number' || typeof fieldValue === 'string' || typeof fieldValue === 'boolean') return fieldValue;
-          if (Array.isArray(fieldValue)) {
-            return fieldValue.map(item => {
-              if (typeof item === 'object' && item.text) return item.text;
-              return String(item);
-            }).join('');
-          }
-          if (typeof fieldValue === 'object') {
-            if (fieldValue.value && Array.isArray(fieldValue.value)) return fieldValue.value[0];
-            if (fieldValue.text) return fieldValue.text;
-            if (fieldValue.value !== undefined) return fieldValue.value;
-            return JSON.stringify(fieldValue);
-          }
-          return fieldValue;
-        };
-
-        // 格式化数据
-        const formattedData: Record<string, any> = {};
-        task.feishuConfig.fieldParams.forEach(param => {
-          const rawFieldValue = fields[param.fieldName];
-          const fieldValue = extractFeishuFieldValue(rawFieldValue);
-          if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
-            if (param.decimalPlaces !== undefined && typeof fieldValue === 'number') {
-              formattedData[param.variableName] = Number(fieldValue.toFixed(param.decimalPlaces));
-            } else {
-              formattedData[param.variableName] = fieldValue;
-            }
-          }
-        });
-
-        // 合并数据模板
-        let finalData = formattedData;
-        if (task.kingdeeConfig.dataTemplate) {
-          try {
-            const template = JSON.parse(task.kingdeeConfig.dataTemplate);
-            finalData = { ...template, ...formattedData };
-          } catch (e) {
-            console.warn('数据模板解析失败');
-          }
-        }
-
-        // 保存到金蝶
-        const kingdeeService = new KingdeeService(task.kingdeeConfig);
-        const saveResult = await kingdeeService.saveData(task.kingdeeConfig.formId, finalData);
-
-        // 回写飞书状态（如果配置了回写字段）
-        let writeBackResult = null;
-        const writeBackFields = task.feishuConfig.writeBackFields || [];
-        if (writeBackFields.length > 0) {
-          const writeData: Record<string, any> = {};
-          writeBackFields.forEach(field => {
-            if (field.source === 'success') {
-              writeData[field.fieldName] = '同步成功';
-            } else if (field.source === 'error') {
-              writeData[field.fieldName] = '';
-            }
-          });
-
-          if (Object.keys(writeData).length > 0) {
-            writeBackResult = await feishuService.writeBackData(
-              task.feishuConfig.tableId,
-              recordId,
-              writeData
-            );
-          }
-        }
-
-        setTestResult({
-          success: true,
-          type: 'sync',
-          title: '完整同步测试成功',
-          message: '第一条记录已成功同步到金蝶并回写状态到飞书',
-          details: {
-            '飞书记录ID': recordId,
-            '金蝶返回': JSON.stringify(saveResult).slice(0, 100) + '...',
-            '回写结果': writeBackResult ? '成功' : '未配置回写字段',
-            '同步数据': JSON.stringify(finalData).slice(0, 200) + '...',
-          },
-        });
-      }
-    } catch (error: any) {
-      setTestResult({
-        success: false,
-        type: testModalType,
-        title: '测试失败',
-        message: error.message,
-      });
-    }
-  };
 
   // 任务管理表格列
   const taskColumns = [
@@ -1217,6 +1109,7 @@ function App() {
               {taskInstances.length === 0 ? (<Empty description="暂无执行记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />) : (
                 taskInstances.map(instance => {
                   const task = tasks.find(t => t.id === instance.taskId);
+                  const latestLog = instanceLatestLogs.get(instance.id);
                   return (
                     <MobileTaskInstanceCard
                       key={instance.id}
@@ -1224,7 +1117,8 @@ function App() {
                       taskName={task?.name}
                       onStop={() => handleStopTask(instance.id)}
                       onDelete={() => handleDeleteInstance(instance.id)}
-                      onViewLogs={() => { setSelectedInstance(instance); setShowWebApiLogs(true); }}
+                      onViewLogs={() => { setSelectedInstance(instance); setShowWebApiLogs(true); loadLogs(instance.id); }}
+                      latestLog={latestLog}
                     />
                   );
                 })
@@ -1323,7 +1217,6 @@ function App() {
             onSave={handleSaveConfig}
             onTest={(type) => {
               setTestModalType(type === 'kingdee-validate' ? 'kingdee' : type);
-              setTestTaskId(selectedTask.id);
               setTestResult(null);
               setTestModalOpen(true);
             }}
@@ -1431,9 +1324,9 @@ function App() {
         )}
       </Modal>
 
-      {/* WebAPI 日志查看弹窗 */}
+      {/* WebAPI 日志查看弹窗 - 包含执行日志 */}
       <Modal
-        title="WebAPI 调用日志"
+        title="执行日志与 WebAPI 调用"
         open={showWebApiLogs && !!selectedInstance}
         onCancel={() => {
           setShowWebApiLogs(false);
@@ -1496,33 +1389,82 @@ function App() {
                 ]} />
               </div>
             ) : (
-              <List
-                size="small"
-                dataSource={selectedInstance.webApiLogs || []}
-                renderItem={(log: WebAPILog) => (
-                  <List.Item
-                    style={{
-                      marginBottom: 8,
-                      borderRadius: 6,
-                      padding: 12,
-                      background: log.success ? '#F6FFED' : '#FFF1F0',
-                      cursor: 'pointer',
-                    }}
-                    onClick={() => setSelectedWebApiLog(log)}
-                  >
-                    <div style={{ width: '100%' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Space>
-                          <Text strong>Record ID: {log.recordId}</Text>
-                          <Tag color={log.success ? 'success' : 'error'}>{log.success ? '成功' : '失败'}</Tag>
-                        </Space>
-                        <Text type="secondary">{new Date(log.timestamp).toLocaleString()}</Text>
-                      </div>
-                      {log.errorMessage && <div><Text type="danger">错误：{log.errorMessage}</Text></div>}
-                    </div>
-                  </List.Item>
-                )}
-              />
+              <div>
+                {/* 执行日志 */}
+                <Card size="small" title="📝 执行日志" style={{ marginBottom: 16 }}>
+                  {logsLoading ? (
+                    <Spin size="small" />
+                  ) : loadedTaskLogs.length === 0 ? (
+                    <Empty description="暂无执行日志" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '20px 0' }} />
+                  ) : (
+                    <List
+                      size="small"
+                      dataSource={loadedTaskLogs}
+                      renderItem={(log: any) => (
+                        <List.Item
+                          style={{
+                            marginBottom: 8,
+                            borderRadius: 6,
+                            padding: 8,
+                            background: log.level === 'error' ? '#FFF1F0' : log.level === 'warn' ? '#FFF7E6' : '#F6FFED',
+                          }}
+                        >
+                          <div style={{ width: '100%' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                              <Space>
+                                <Tag color={log.level === 'error' ? 'error' : log.level === 'warn' ? 'warning' : 'success'}>
+                                  {log.level === 'error' ? '错误' : log.level === 'warn' ? '警告' : '信息'}
+                                </Tag>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                  {new Date(log.timestamp).toLocaleString()}
+                                </Text>
+                              </Space>
+                            </div>
+                            <div style={{ fontSize: 13 }}>{log.message}</div>
+                          </div>
+                        </List.Item>
+                      )}
+                    />
+                  )}
+                </Card>
+
+                {/* WebAPI 调用日志 */}
+                <Card size="small" title={`🌐 WebAPI 调用日志（最近 10 条）`}>
+                  {logsLoading ? (
+                    <Spin size="small" />
+                  ) : loadedWebApiLogs.length === 0 ? (
+                    <Empty description="暂无 WebAPI 调用记录" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '20px 0' }} />
+                  ) : (
+                    <List
+                      size="small"
+                      dataSource={loadedWebApiLogs}
+                      renderItem={(log: WebAPILog) => (
+                        <List.Item
+                          style={{
+                            marginBottom: 8,
+                            borderRadius: 6,
+                            padding: 12,
+                            background: log.success ? '#F6FFED' : '#FFF1F0',
+                            cursor: 'pointer',
+                          }}
+                          onClick={() => setSelectedWebApiLog(log)}
+                        >
+                          <div style={{ width: '100%' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                              <Space>
+                                <Text strong>Record ID: {log.recordId}</Text>
+                                <Tag color={log.success ? 'success' : 'error'}>{log.success ? '成功' : '失败'}</Tag>
+                              </Space>
+                              <Text type="secondary">{new Date(log.timestamp).toLocaleString()}</Text>
+                            </div>
+                            {log.errorMessage && <div><Text type="danger">错误：{log.errorMessage}</Text></div>}
+                          </div>
+                        </List.Item>
+                      )}
+                    />
+                  )}
+                </Card>
+              </div>
             )}
           </div>
         )}
@@ -1986,7 +1928,6 @@ return (
           onSave={handleSaveConfig}
           onTest={(type) => {
             setTestModalType(type === 'kingdee-validate' ? 'kingdee' : type);
-            setTestTaskId(selectedTask.id);
             setTestResult(null);
             setTestModalOpen(true);
           }}
@@ -1998,7 +1939,11 @@ return (
     <Modal
       title="任务执行详情"
       open={!!selectedInstance}
-      onCancel={() => setSelectedInstance(null)}
+      onCancel={() => {
+        setSelectedInstance(null);
+        setLoadedTaskLogs([]);
+        setLoadedWebApiLogs([]);
+      }}
       footer={[
         <Button key="close" onClick={() => setSelectedInstance(null)}>
           关闭
@@ -2034,21 +1979,20 @@ return (
             </Col>
           </Row>
 
-          {selectedInstance.webApiLogs && selectedInstance.webApiLogs.length > 0 && (
-            <Card size="small" style={{ marginBottom: 16, background: '#FFF8E7', border: '1px solid #FFD88A' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Space>
-                  <ApiOutlined style={{ color: '#F5A623' }} />
-                  <Text strong>WebAPI 调用日志</Text>
-                  <Tag color="warning">{selectedInstance.webApiLogs.length} 条记录</Tag>
-                </Space>
-                <Button type="primary" size="small" style={{ background: '#F5A623', borderColor: '#F5A623' }} onClick={() => setShowWebApiLogs(true)}>
-                  查看详情
-                </Button>
-              </div>
-            </Card>
-          )}
+          {/* WebAPI 调用日志摘要 */}
+          <Card size="small" style={{ marginBottom: 16, background: '#FFF8E7', border: '1px solid #FFD88A' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Space>
+                <ApiOutlined style={{ color: '#F5A623' }} />
+                <Text strong>WebAPI 调用日志</Text>
+              </Space>
+              <Button type="primary" size="small" style={{ background: '#F5A623', borderColor: '#F5A623' }} onClick={() => { setShowWebApiLogs(true); loadLogs(selectedInstance.id); }}>
+                查看详情
+              </Button>
+            </div>
+          </Card>
 
+          {/* 执行日志 */}
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>执行日志</div>
             <div style={{
@@ -2061,15 +2005,15 @@ return (
               fontFamily: 'monospace',
               fontSize: 12,
             }}>
-              {selectedInstance.logs.length === 0 ? (
+              {loadedTaskLogs.length === 0 ? (
                 <Empty description="暂无日志" image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
-                selectedInstance.logs.map((log, index) => (
+                loadedTaskLogs.slice(0, 50).map((log: any, index: number) => (
                   <div
                     key={index}
                     style={{
                       padding: '4px 0',
-                      borderBottom: index < selectedInstance.logs.length - 1 ? '1px solid #eee' : 'none',
+                      borderBottom: index < 49 ? '1px solid #eee' : 'none',
                       color: log.level === 'error' ? '#ff4d4f' :
                              log.level === 'warn' ? '#faad14' :
                              '#666',

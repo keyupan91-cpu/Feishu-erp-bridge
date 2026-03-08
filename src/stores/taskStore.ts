@@ -8,25 +8,25 @@ interface TaskStore {
   tasks: TaskConfig[];
   // 任务实例
   taskInstances: TaskInstance[];
-  
+
   // 任务管理
   addTask: (task: Omit<TaskConfig, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateTask: (id: string, task: Partial<TaskConfig>) => void;
   deleteTask: (id: string) => void;
   copyTask: (id: string, newName: string) => void;
   toggleTask: (id: string) => void;
-  
+
   // 任务实例管理
   createTaskInstance: (taskId: string) => TaskInstance;
   updateTaskInstance: (id: string, instance: Partial<TaskInstance>) => void;
   deleteTaskInstance: (id: string) => void;
-  addTaskLog: (instanceId: string, log: TaskLog) => void;
-  addWebApiLog: (instanceId: string, log: import('../types').WebAPILog) => void;
-  
+  addTaskLog: (instanceId: string, log: TaskLog) => Promise<void>;
+  addWebApiLog: (instanceId: string, log: import('../types').WebAPILog) => Promise<void>;
+
   // 任务执行控制
   startTask: (taskId: string) => TaskInstance;
   stopTask: (instanceId: string) => void;
-  
+
   // 数据导出导入
   exportData: () => { tasks: TaskConfig[]; taskInstances: TaskInstance[]; exportTime: string };
   importData: (data: { tasks: TaskConfig[]; taskInstances: TaskInstance[] }) => void;
@@ -39,7 +39,7 @@ export const useTaskStore = create<TaskStore>()(
       // 初始状态
       tasks: [],
       taskInstances: [],
-      
+
       // 添加任务
       addTask: (task) => {
         const newTask: TaskConfig = {
@@ -52,7 +52,7 @@ export const useTaskStore = create<TaskStore>()(
           tasks: [...state.tasks, newTask],
         }));
       },
-      
+
       // 更新任务
       updateTask: (id, task) => {
         set((state) => ({
@@ -67,7 +67,7 @@ export const useTaskStore = create<TaskStore>()(
           ),
         }));
       },
-      
+
       // 删除任务
       deleteTask: (id) => {
         set((state) => ({
@@ -75,7 +75,7 @@ export const useTaskStore = create<TaskStore>()(
           taskInstances: state.taskInstances.filter((i) => i.taskId !== id),
         }));
       },
-      
+
       // 复制任务
       copyTask: (id, newName) => {
         const task = get().tasks.find((t) => t.id === id);
@@ -87,7 +87,7 @@ export const useTaskStore = create<TaskStore>()(
           });
         }
       },
-      
+
       // 切换任务启用状态
       toggleTask: (id) => {
         set((state) => ({
@@ -96,15 +96,13 @@ export const useTaskStore = create<TaskStore>()(
           ),
         }));
       },
-      
-      // 创建任务实例
+
+      // 创建任务实例（logs 和 webApiLogs 已移除，存储在 IndexedDB 中）
       createTaskInstance: (taskId) => {
         const newInstance: TaskInstance = {
           id: Date.now().toString(),
           taskId,
           status: TaskStatus.IDLE,
-          logs: [],
-          webApiLogs: [],
           progress: 0,
         };
         set((state) => ({
@@ -112,7 +110,7 @@ export const useTaskStore = create<TaskStore>()(
         }));
         return newInstance;
       },
-      
+
       // 更新任务实例
       updateTaskInstance: (id, instance) => {
         set((state) => ({
@@ -121,44 +119,16 @@ export const useTaskStore = create<TaskStore>()(
           ),
         }));
       },
-      
-      // 添加任务日志（限制最多保留500条，防止存储过大）
-      addTaskLog: (instanceId: string, log: TaskLog) => {
-        set((state) => ({
-          taskInstances: state.taskInstances.map((i) => {
-            if (i.id !== instanceId) return i;
-            const newLogs = [...i.logs, log];
-            // 只保留最近500条日志
-            if (newLogs.length > 500) {
-              newLogs.splice(0, newLogs.length - 500);
-            }
-            return { ...i, logs: newLogs };
-          }),
-        }));
-      },
 
-      // 添加WebAPI日志（限制最多保留100条）
-      addWebApiLog: (instanceId: string, log: import('../types').WebAPILog) => {
-        set((state) => ({
-          taskInstances: state.taskInstances.map((i) => {
-            if (i.id !== instanceId) return i;
-            const newLogs = [...i.webApiLogs, log];
-            // 只保留最近100条WebAPI日志
-            if (newLogs.length > 100) {
-              newLogs.splice(0, newLogs.length - 100);
-            }
-            return { ...i, webApiLogs: newLogs };
-          }),
-        }));
-      },
-      
-      // 删除任务实例
-      deleteTaskInstance: (id) => {
+      // 删除任务实例（同时删除 IndexedDB 中的日志）
+      deleteTaskInstance: async (id) => {
+        const { logStorage } = await import('../services/logStorage');
+        await logStorage.deleteInstanceLogs(id);
         set((state) => ({
           taskInstances: state.taskInstances.filter((i) => i.id !== id),
         }));
       },
-      
+
       // 开始任务
       startTask: (taskId: string) => {
         const instance = get().createTaskInstance(taskId);
@@ -168,7 +138,7 @@ export const useTaskStore = create<TaskStore>()(
         });
         return instance;
       },
-      
+
       // 停止任务
       stopTask: (instanceId) => {
         get().updateTaskInstance(instanceId, {
@@ -176,7 +146,19 @@ export const useTaskStore = create<TaskStore>()(
           endTime: new Date().toISOString(),
         });
       },
-      
+
+      // 添加任务日志 - 直接写入 IndexedDB，不占用内存
+      addTaskLog: async (instanceId: string, log: TaskLog) => {
+        const { logStorage } = await import('../services/logStorage');
+        await logStorage.addTaskLog(instanceId, log);
+      },
+
+      // 添加 WebAPI 日志 - 直接写入 IndexedDB，不占用内存
+      addWebApiLog: async (instanceId: string, log: import('../types').WebAPILog) => {
+        const { logStorage } = await import('../services/logStorage');
+        await logStorage.addWebApiLog(instanceId, log);
+      },
+
       // 导出所有数据
       exportData: () => {
         const state = get();
@@ -186,7 +168,7 @@ export const useTaskStore = create<TaskStore>()(
           exportTime: new Date().toISOString(),
         };
       },
-      
+
       // 导入数据（会覆盖现有数据）
       importData: (data) => {
         set({
@@ -194,7 +176,7 @@ export const useTaskStore = create<TaskStore>()(
           taskInstances: data.taskInstances || [],
         });
       },
-      
+
       // 清空所有数据
       clearAllData: () => {
         set({

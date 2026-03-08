@@ -86,7 +86,9 @@ class FeishuService {
       const requestBody: any = {};
 
       // 添加视图ID（如果提供）
-      if (viewId) {
+      // 注意：根据飞书 API 文档，当 filter 或 sort 不为空时，view_id 会被忽略
+      // 因此如果同时有 filterConditions，则不使用 view_id
+      if (viewId && (!filterConditions || filterConditions.length === 0)) {
         requestBody.view_id = viewId;
       }
 
@@ -110,8 +112,8 @@ class FeishuService {
       let allItems: any[] = [];
       let pageToken: string | undefined = undefined;
       
-      // 如果需要在客户端过滤，需要获取所有数据
-      const pageSize = needsClientFilter ? 500 : 1;
+      // 如果需要在客户端过滤，需要获取所有数据；否则默认查询全部（使用 500 分页）
+      const pageSize = 500;
       
       while (true) {
         const searchResponse: { data: FeishuResponse } = await axios.post<FeishuResponse>(
@@ -135,11 +137,6 @@ class FeishuService {
           const items = searchResponse.data.data?.items || [];
           allItems = allItems.concat(items);
           pageToken = searchResponse.data.data?.page_token;
-          
-          // 如果不需要客户端过滤，只查询一页即可
-          if (!needsClientFilter) {
-            break;
-          }
         } else {
           throw new Error(`查询失败: ${searchResponse.data.msg} (code: ${searchResponse.data.code})`);
         }
@@ -373,7 +370,9 @@ class FeishuService {
         requestBody.field_names = fieldNames;
       }
 
-      if (viewId) {
+      // 注意：根据飞书 API 文档，当 filter 或 sort 不为空时，view_id 会被忽略
+      // 因此如果同时有 filterConditions，则不使用 view_id
+      if (viewId && (!filterConditions || filterConditions.length === 0)) {
         requestBody.view_id = viewId;
       }
 

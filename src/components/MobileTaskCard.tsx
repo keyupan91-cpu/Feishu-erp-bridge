@@ -290,6 +290,7 @@ export interface MobileTaskInstanceCardProps {
   onStop?: () => void;
   onDelete?: () => void;
   onViewLogs?: () => void;
+  latestLog?: { timestamp: string; message: string; level: string }; // 最新日志（从外部传入）
 }
 
 export function MobileTaskInstanceCard({
@@ -298,6 +299,7 @@ export function MobileTaskInstanceCard({
   onStop,
   onDelete,
   onViewLogs,
+  latestLog,
 }: MobileTaskInstanceCardProps) {
   const getStatusConfig = () => {
     switch (instance.status) {
@@ -371,20 +373,24 @@ export function MobileTaskInstanceCard({
         )}
       </div>
 
-      {instance.logs && instance.logs.length > 0 && (
+      {latestLog ? (
         <div className="mobile-instance-logs">
           <div className="log-entry">
             <span className="log-time">
-              {new Date(instance.logs[instance.logs.length - 1].timestamp).toLocaleTimeString('zh-CN', {
+              {new Date(latestLog.timestamp).toLocaleTimeString('zh-CN', {
                 hour: '2-digit',
                 minute: '2-digit',
                 second: '2-digit',
               })}
             </span>
             <span className="log-message">
-              {instance.logs[instance.logs.length - 1].message}
+              {latestLog.message}
             </span>
           </div>
+        </div>
+      ) : (
+        <div className="mobile-instance-logs" style={{ textAlign: 'center', color: '#888' }}>
+          暂无日志
         </div>
       )}
 
