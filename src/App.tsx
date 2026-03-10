@@ -22,6 +22,7 @@ import {
   Steps,
   Alert,
   Collapse,
+  Spin,
 } from 'antd';
 import {
   PlusOutlined,
@@ -605,18 +606,30 @@ function App() {
     });
   };
 
-  // 加载日志 - 从 IndexedDB 加载（全部存储，但只加载前 10 条用于显示）
+  // 加载日志 - 任务日志从 IndexedDB，WebAPI 日志从后端文件
   const loadLogs = async (instanceId: string, loadFull = false) => {
     setLogsLoading(true);
     try {
       const { logStorage } = await import('./services/logStorage');
+      const { logsApi } = await import('./services/apiService');
       const limit = loadFull ? 1000 : 10; // 加载完整日志时最多 1000 条
-      const [taskLogs, webApiLogs] = await Promise.all([
-        logStorage.getTaskLogs(instanceId, { limit, reverse: true }),
-        logStorage.getWebApiLogs(instanceId, { limit: loadFull ? 100 : 10, reverse: true }),
-      ]);
+
+      // 任务日志从 IndexedDB 加载
+      const taskLogs = await logStorage.getTaskLogs(instanceId, { limit, reverse: true });
+
+      // WebAPI 日志从后端文件加载（只保存第一条记录）
+      let webApiLogs: any[] = [];
+      try {
+        const result = await logsApi.getLog(instanceId);
+        if (result.success && result.log) {
+          webApiLogs = [result.log];
+        }
+      } catch (e) {
+        // 日志不存在，忽略
+      }
+
       setLoadedTaskLogs(taskLogs.slice(0, 10)); // PC 端主界面只显示前 10 条
-      setLoadedWebApiLogs(webApiLogs.slice(0, 10)); // PC 端主界面只显示前 10 条
+      setLoadedWebApiLogs(webApiLogs);
       if (loadFull) {
         setLoadedFullTaskLogs(taskLogs); // 完整日志用于详情弹窗
       }
@@ -1061,7 +1074,7 @@ function App() {
       align: 'center' as const,
       render: (_: any, record: any) => {
         const instance = record.instance;
-        const isFinished = instance.status === TaskStatus.SUCCESS || instance.status === TaskStatus.ERROR;
+        const isFinished = instance.status === TaskStatus.SUCCESS || instance.status === TaskStatus.ERROR || instance.status === TaskStatus.WARNING;
         return (
           <Space size="small">
             {instance.status === TaskStatus.RUNNING && (
@@ -1341,61 +1354,25 @@ function App() {
               />
             </div>
 
-            {selectedInstance.webApiLogs && selectedInstance.webApiLogs.length > 0 && (
-              <Card size="small" style={{ marginBottom: 16, background: '#FFF8E7', border: '1px solid #FFD88A' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Space>
-                    <ApiOutlined style={{ color: '#F5A623' }} />
-                    <Text strong>WebAPI 调用日志</Text>
-                    <Tag color="warning">{selectedInstance.webApiLogs.length} 条记录</Tag>
-                  </Space>
-                  <Button type="primary" size="small" style={{ background: '#F5A623', borderColor: '#F5A623' }} onClick={() => setShowWebApiLogs(true)}>
-                    查看详情
-                  </Button>
-                </div>
-              </Card>
-            )}
-
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>执行日志</div>
-              <div style={{
-                background: '#fafafa',
-                border: '1px solid #e8e8e8',
-                borderRadius: 4,
-                padding: 12,
-                maxHeight: 300,
-                overflowY: 'auto',
-                fontFamily: 'monospace',
-                fontSize: 12,
-              }}>
-                {selectedInstance.logs.length === 0 ? (
-                  <Empty description="暂无日志" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                ) : (
-                  selectedInstance.logs.map((log, index) => (
-                    <div
-                      key={index}
-                      style={{
-                        padding: '4px 0',
-                        borderBottom: index < selectedInstance.logs.length - 1 ? '1px solid #eee' : 'none',
-                        color: log.level === 'error' ? '#ff4d4f' :
-                               log.level === 'warn' ? '#faad14' :
-                               '#666',
-                      }}
-                    >
-                      <span style={{ color: '#999' }}>[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                      {' '}{log.message}
-                    </div>
-                  ))
-                )}
+            {/* WebAPI 详情入口 */}
+            <Card size="small" style={{ marginBottom: 16, background: '#FFF8E7', border: '1px solid #FFD88A' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Space>
+                  <ApiOutlined style={{ color: '#F5A623' }} />
+                  <Text strong>WebAPI 调用详情</Text>
+                </Space>
+                <Button type="primary" size="small" style={{ background: '#F5A623', borderColor: '#F5A623' }} onClick={() => { setShowWebApiLogs(true); loadLogs(selectedInstance.id, true); }}>
+                  查看详情
+                </Button>
               </div>
-            </div>
+            </Card>
           </div>
         )}
       </Modal>
 
-      {/* WebAPI 日志查看弹窗 - 包含执行日志 */}
+      {/* WebAPI 日志查看弹窗 - 直接显示第一条记录详情 */}
       <Modal
-        title="执行日志与 WebAPI 调用"
+        title="WebAPI 调用详情（第一条记录）"
         open={showWebApiLogs && !!selectedInstance}
         onCancel={() => {
           setShowWebApiLogs(false);
@@ -1411,130 +1388,57 @@ function App() {
       >
         {selectedInstance && (
           <div>
-            {selectedWebApiLog ? (
-              <div>
-                <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => setSelectedWebApiLog(null)} style={{ marginBottom: 16, padding: 0 }}>
-                  返回日志列表
-                </Button>
-                <Card size="small" title={<Space><Text strong>Record ID: {selectedWebApiLog.recordId}</Text>{selectedWebApiLog.success ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>}</Space>} style={{ marginBottom: 16 }}>
-                  <div style={{ marginBottom: 8 }}>
-                    <Text type="secondary">调用时间:</Text>
-                    <Text style={{ marginLeft: 8 }}>{new Date(selectedWebApiLog.timestamp).toLocaleString()}</Text>
-                  </div>
-                  {selectedWebApiLog.errorMessage && (
-                    <div style={{ marginBottom: 16 }}>
-                      <Text type="danger">错误信息：{selectedWebApiLog.errorMessage}</Text>
+            {logsLoading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+            ) : loadedWebApiLogs.length === 0 ? (
+              <Empty description="暂无 WebAPI 调用记录（任务可能未执行到数据同步阶段）" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
+            ) : (() => {
+              const firstLog = loadedWebApiLogs[0]; // 第一条记录（从后端获取的唯一一条）
+              return (
+                <div>
+                  <Card size="small" title={<Space><Text strong>Record ID: {firstLog.recordId}</Text>{firstLog.success ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>}</Space>} style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <Text type="secondary">调用时间:</Text>
+                      <Text style={{ marginLeft: 8 }}>{new Date(firstLog.timestamp).toLocaleString()}</Text>
                     </div>
-                  )}
-                </Card>
-                <Collapse defaultActiveKey={['feishu']} items={[
-                  {
-                    key: 'feishu',
-                    label: '📄 飞书原始数据',
-                    children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(selectedWebApiLog.feishuData, null, 2)}</pre>
-                  },
-                  {
-                    key: 'request',
-                    label: '📤 发送到金蝶的数据',
-                    children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(selectedWebApiLog.requestData, null, 2)}</pre>
-                  },
-                  {
-                    key: 'response',
-                    label: '📥 金蝶响应数据',
-                    children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(selectedWebApiLog.responseData, null, 2)}</pre>
-                  },
-                  {
-                    key: 'writeback',
-                    label: '↩️ 回写到飞书的数据',
-                    children: selectedWebApiLog.writeBackData ? (
-                      <div>
-                        <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(selectedWebApiLog.writeBackData, null, 2)}</pre>
-                        {selectedWebApiLog.writeBackError && (
-                          <Alert type="error" message={selectedWebApiLog.writeBackError} style={{ marginTop: 8 }} />
-                        )}
+                    {firstLog.errorMessage && (
+                      <div style={{ marginBottom: 16 }}>
+                        <Text type="danger">错误信息：{firstLog.errorMessage}</Text>
                       </div>
-                    ) : <Empty description="无回写数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                  }
-                ]} />
-              </div>
-            ) : (
-              <div>
-                {/* 执行日志 */}
-                <Card size="small" title="📝 执行日志（最近 10 条）" style={{ marginBottom: 16 }}>
-                  {logsLoading ? (
-                    <Spin size="small" />
-                  ) : loadedTaskLogs.length === 0 ? (
-                    <Empty description="暂无执行日志" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '20px 0' }} />
-                  ) : (
-                    <List
-                      size="small"
-                      dataSource={loadedTaskLogs}
-                      renderItem={(log: any) => (
-                        <List.Item
-                          style={{
-                            marginBottom: 8,
-                            borderRadius: 6,
-                            padding: 8,
-                            background: log.level === 'error' ? '#FFF1F0' : log.level === 'warn' ? '#FFF7E6' : '#F6FFED',
-                          }}
-                        >
-                          <div style={{ width: '100%' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                              <Space>
-                                <Tag color={log.level === 'error' ? 'error' : log.level === 'warn' ? 'warning' : 'success'}>
-                                  {log.level === 'error' ? '错误' : log.level === 'warn' ? '警告' : '信息'}
-                                </Tag>
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                  {new Date(log.timestamp).toLocaleString()}
-                                </Text>
-                              </Space>
-                            </div>
-                            <div style={{ fontSize: 13 }}>{log.message}</div>
-                          </div>
-                        </List.Item>
-                      )}
-                    />
-                  )}
-                </Card>
-
-                {/* WebAPI 调用日志 */}
-                <Card size="small" title={`🌐 WebAPI 调用日志（最近 10 条）`}>
-                  {logsLoading ? (
-                    <Spin size="small" />
-                  ) : loadedWebApiLogs.length === 0 ? (
-                    <Empty description="暂无 WebAPI 调用记录" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '20px 0' }} />
-                  ) : (
-                    <List
-                      size="small"
-                      dataSource={loadedWebApiLogs}
-                      renderItem={(log: WebAPILog) => (
-                        <List.Item
-                          style={{
-                            marginBottom: 8,
-                            borderRadius: 6,
-                            padding: 12,
-                            background: log.success ? '#F6FFED' : '#FFF1F0',
-                            cursor: 'pointer',
-                          }}
-                          onClick={() => setSelectedWebApiLog(log)}
-                        >
-                          <div style={{ width: '100%' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                              <Space>
-                                <Text strong>Record ID: {log.recordId}</Text>
-                                <Tag color={log.success ? 'success' : 'error'}>{log.success ? '成功' : '失败'}</Tag>
-                              </Space>
-                              <Text type="secondary">{new Date(log.timestamp).toLocaleString()}</Text>
-                            </div>
-                            {log.errorMessage && <div><Text type="danger">错误：{log.errorMessage}</Text></div>}
-                          </div>
-                        </List.Item>
-                      )}
-                    />
-                  )}
-                </Card>
-              </div>
-            )}
+                    )}
+                  </Card>
+                  <Collapse defaultActiveKey={['feishu', 'request', 'response', 'writeback']} items={[
+                    {
+                      key: 'feishu',
+                      label: '📄 飞书原始数据',
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.feishuData, null, 2)}</pre>
+                    },
+                    {
+                      key: 'request',
+                      label: '📤 导入金蝶的数据',
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.requestData, null, 2)}</pre>
+                    },
+                    {
+                      key: 'response',
+                      label: '📥 金蝶响应数据',
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.responseData, null, 2)}</pre>
+                    },
+                    {
+                      key: 'writeback',
+                      label: '↩️ 数据回写的数据',
+                      children: firstLog.writeBackData && Object.keys(firstLog.writeBackData).length > 0 ? (
+                        <div>
+                          <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.writeBackData, null, 2)}</pre>
+                          {firstLog.writeBackError && (
+                            <Alert type="error" message={firstLog.writeBackError} style={{ marginTop: 8 }} />
+                          )}
+                        </div>
+                      ) : <Empty description="无回写数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    }
+                  ]} />
+                </div>
+              );
+            })()}
           </div>
         )}
       </Modal>
@@ -2035,8 +1939,10 @@ return (
               <Card size="small">
                 <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>状态</div>
                 <div>
-                  <Tag color={selectedInstance.status === TaskStatus.RUNNING ? 'blue' : selectedInstance.status === TaskStatus.SUCCESS ? 'green' : 'default'}>
-                    {selectedInstance.status}
+                  <Tag color={selectedInstance.status === TaskStatus.RUNNING ? 'blue' : selectedInstance.status === TaskStatus.SUCCESS ? 'green' : selectedInstance.status === TaskStatus.WARNING ? 'orange' : 'default'}>
+                    {selectedInstance.status === TaskStatus.RUNNING ? '执行中' :
+                     selectedInstance.status === TaskStatus.SUCCESS ? '成功' :
+                     selectedInstance.status === TaskStatus.WARNING ? '部分成功' : '失败'}
                   </Tag>
                 </div>
               </Card>
@@ -2049,152 +1955,94 @@ return (
             </Col>
           </Row>
 
-          {/* WebAPI 调用日志摘要 */}
+          {/* WebAPI 详情入口 */}
           <Card size="small" style={{ marginBottom: 16, background: '#FFF8E7', border: '1px solid #FFD88A' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Space>
                 <ApiOutlined style={{ color: '#F5A623' }} />
-                <Text strong>WebAPI 调用日志</Text>
+                <Text strong>WebAPI 调用详情</Text>
               </Space>
-              <Button type="primary" size="small" style={{ background: '#F5A623', borderColor: '#F5A623' }} onClick={() => { setShowWebApiLogs(true); loadLogs(selectedInstance.id); }}>
+              <Button type="primary" size="small" style={{ background: '#F5A623', borderColor: '#F5A623' }} onClick={() => { setShowWebApiLogs(true); loadLogs(selectedInstance.id, true); }}>
                 查看详情
               </Button>
             </div>
           </Card>
-
-          {/* 执行日志 */}
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>执行日志（全部）</div>
-            <div style={{
-              background: '#fafafa',
-              border: '1px solid #e8e8e8',
-              borderRadius: 4,
-              padding: 12,
-              maxHeight: 400,
-              overflowY: 'auto',
-              fontFamily: 'monospace',
-              fontSize: 12,
-            }}>
-              {loadedFullTaskLogs.length === 0 ? (
-                <Empty description="暂无日志" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              ) : (
-                loadedFullTaskLogs.map((log: any, index: number) => (
-                  <div
-                    key={index}
-                    style={{
-                      padding: '4px 0',
-                      borderBottom: index < loadedFullTaskLogs.length - 1 ? '1px solid #eee' : 'none',
-                      color: log.level === 'error' ? '#ff4d4f' :
-                             log.level === 'warn' ? '#faad14' :
-                             '#666',
-                    }}
-                  >
-                    <span style={{ color: '#999' }}>[{new Date(log.timestamp).toLocaleTimeString()}]</span>
-                    {' '}{log.message}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
         </div>
       )}
     </Modal>
 
-    {/* WebAPI 日志查看弹窗 */}
+    {/* WebAPI 日志查看弹窗 - 直接显示第一条记录详情 */}
     <Modal
-      title="WebAPI 调用日志"
-      open={showWebApiLogs && !!selectedInstance}
-      onCancel={() => {
-        setShowWebApiLogs(false);
-        setSelectedWebApiLog(null);
-      }}
-      footer={[
-        <Button key="close" onClick={() => { setShowWebApiLogs(false); setSelectedWebApiLog(null); }}>
-          关闭
-        </Button>,
-      ]}
-      width={900}
-      className="custom-modal"
-    >
-      {selectedInstance && (
-        <div>
-          {selectedWebApiLog ? (
-            <div>
-              <Button type="link" icon={<ArrowLeftOutlined />} onClick={() => setSelectedWebApiLog(null)} style={{ marginBottom: 16, padding: 0 }}>
-                返回日志列表
-              </Button>
-              <Card size="small" title={<Space><Text strong>Record ID: {selectedWebApiLog.recordId}</Text>{selectedWebApiLog.success ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>}</Space>} style={{ marginBottom: 16 }}>
-                <div style={{ marginBottom: 8 }}>
-                  <Text type="secondary">调用时间:</Text>
-                  <Text style={{ marginLeft: 8 }}>{new Date(selectedWebApiLog.timestamp).toLocaleString()}</Text>
+        title="WebAPI 调用详情（第一条记录）"
+        open={showWebApiLogs && !!selectedInstance}
+        onCancel={() => {
+          setShowWebApiLogs(false);
+          setSelectedWebApiLog(null);
+        }}
+        footer={[
+          <Button key="close" onClick={() => { setShowWebApiLogs(false); setSelectedWebApiLog(null); }}>
+            关闭
+          </Button>,
+        ]}
+        width={900}
+        className="custom-modal"
+      >
+        {selectedInstance && (
+          <div>
+            {logsLoading ? (
+              <div style={{ textAlign: 'center', padding: 40 }}><Spin size="large" /></div>
+            ) : loadedWebApiLogs.length === 0 ? (
+              <Empty description="暂无 WebAPI 调用记录（任务可能未执行到数据同步阶段）" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
+            ) : (() => {
+              const firstLog = loadedWebApiLogs[0]; // 第一条记录（从后端获取的唯一一条）
+              return (
+                <div>
+                  <Card size="small" title={<Space><Text strong>Record ID: {firstLog.recordId}</Text>{firstLog.success ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>}</Space>} style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 8 }}>
+                      <Text type="secondary">调用时间:</Text>
+                      <Text style={{ marginLeft: 8 }}>{new Date(firstLog.timestamp).toLocaleString()}</Text>
+                    </div>
+                    {firstLog.errorMessage && (
+                      <div style={{ marginBottom: 16 }}>
+                        <Text type="danger">错误信息：{firstLog.errorMessage}</Text>
+                      </div>
+                    )}
+                  </Card>
+                  <Collapse defaultActiveKey={['feishu', 'request', 'response', 'writeback']} items={[
+                    {
+                      key: 'feishu',
+                      label: '📄 飞书原始数据',
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.feishuData, null, 2)}</pre>
+                    },
+                    {
+                      key: 'request',
+                      label: '📤 导入金蝶的数据',
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.requestData, null, 2)}</pre>
+                    },
+                    {
+                      key: 'response',
+                      label: '📥 金蝶响应数据',
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.responseData, null, 2)}</pre>
+                    },
+                    {
+                      key: 'writeback',
+                      label: '↩️ 数据回写的数据',
+                      children: firstLog.writeBackData && Object.keys(firstLog.writeBackData).length > 0 ? (
+                        <div>
+                          <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.writeBackData, null, 2)}</pre>
+                          {firstLog.writeBackError && (
+                            <Alert type="error" message={firstLog.writeBackError} style={{ marginTop: 8 }} />
+                          )}
+                        </div>
+                      ) : <Empty description="无回写数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    }
+                  ]} />
                 </div>
-                {selectedWebApiLog.errorMessage && (
-                  <div style={{ marginBottom: 16 }}>
-                    <Text type="danger">错误信息：{selectedWebApiLog.errorMessage}</Text>
-                  </div>
-                )}
-              </Card>
-              <Collapse defaultActiveKey={['feishu']} items={[
-                {
-                  key: 'feishu',
-                  label: '📄 飞书原始数据',
-                  children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(selectedWebApiLog.feishuData, null, 2)}</pre>
-                },
-                {
-                  key: 'request',
-                  label: '📤 发送到金蝶的数据',
-                  children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(selectedWebApiLog.requestData, null, 2)}</pre>
-                },
-                {
-                  key: 'response',
-                  label: '📥 金蝶响应数据',
-                  children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(selectedWebApiLog.responseData, null, 2)}</pre>
-                },
-                {
-                  key: 'writeback',
-                  label: '↩️ 回写到飞书的数据',
-                  children: selectedWebApiLog.writeBackData ? (
-                    <div>
-                      <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(selectedWebApiLog.writeBackData, null, 2)}</pre>
-                      {selectedWebApiLog.writeBackError && (
-                        <Alert type="error" message={selectedWebApiLog.writeBackError} style={{ marginTop: 8 }} />
-                      )}
-                    </div>
-                  ) : <Empty description="无回写数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                }
-              ]} />
-            </div>
-          ) : (
-            <List
-              size="small"
-              dataSource={loadedWebApiLogs}
-              renderItem={(log: WebAPILog) => (
-                <List.Item
-                  style={{
-                    marginBottom: 8,
-                    borderRadius: 6,
-                    padding: 12,
-                    background: log.success ? '#F6FFED' : '#FFF1F0',
-                    cursor: 'pointer',
-                  }}
-                  onClick={() => setSelectedWebApiLog(log)}
-                >
-                  <div style={{ width: '100%' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                      <Text strong>{log.recordId}</Text>
-                      <Tag color={log.success ? 'success' : 'error'}>{log.success ? '成功' : '失败'}</Tag>
-                    </div>
-                    <div style={{ fontSize: 12, color: '#999' }}>
-                      {new Date(log.timestamp).toLocaleString()}
-                    </div>
-                  </div>
-                </List.Item>
-              )}
-            />
-          )}
-        </div>
-      )}
-    </Modal>
+              );
+            })()}
+          </div>
+        )}
+      </Modal>
 
     {/* 测试连接弹窗（含验证测试）- 桌面端 */}
     <Modal

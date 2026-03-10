@@ -511,7 +511,9 @@ export class TaskExecutor {
     this.kingdeeService = new KingdeeService(task.kingdeeConfig);
     this.isRunning = false;
     this.isStopped = false;
+    this.isStopping = false; // 安全停止标志：正在等待当前任务完成
     this.firstLogSaved = false;
+    this.executingPromises = []; // 正在执行的 Promise 列表
   }
 
   // 更新实例状态
@@ -873,9 +875,22 @@ export class TaskExecutor {
         });
       };
 
+      // 保存正在执行的 Promise 引用，用于安全停止
+      this.executingPromises = executing;
+
       while (queue.length > 0 || executing.length > 0) {
+        // 如果请求停止，不再从队列取新任务，但等待当前任务完成
+        if (this.isStopping) {
+          console.log(`[${this.instance.id}] 正在安全停止，等待 ${executing.length} 个任务完成...`);
+          // 不再取新任务，等待当前执行的任务完成
+          if (executing.length > 0) {
+            await Promise.all(executing);
+          }
+          break;
+        }
+
         if (this.isStopped) {
-          console.log(`[${this.instance.id}] 任务已被取消`);
+          console.log(`[${this.instance.id}] 任务已被强制取消`);
           break;
         }
 
@@ -899,7 +914,7 @@ export class TaskExecutor {
 
       // 步骤 3: 更新任务状态
       let finalStatus;
-      if (this.isStopped) {
+      if (this.isStopped || this.isStopping) {
         finalStatus = TaskStatus.ERROR;
       } else if (errorCount === 0) {
         finalStatus = TaskStatus.SUCCESS;
@@ -931,10 +946,49 @@ export class TaskExecutor {
     }
   }
 
-  // 停止任务
+  // 停止任务（安全停止：等待当前正在执行的记录完成）
   stop() {
-    this.isStopped = true;
-    console.log(`[${this.instance.id}] 任务已请求停止`);
+    if (this.isStopping || this.isStopped) {
+      return; // 已经在停止中或已停止
+    }
+
+    // 设置安全停止标志
+    this.isStopping = true;
+    console.log(`[${this.instance.id}] 请求安全停止，等待当前任务完成...`);
+
+    // 如果有正在执行的任务，等待它们完成
+    if (this.executingPromises && this.executingPromises.length > 0) {
+      console.log(`[${this.instance.id}] 等待 ${this.executingPromises.length} 个正在执行的任务完成...`);
+
+      // 异步等待正在执行的任务完成
+      Promise.all(this.executingPromises).then(() => {
+        console.log(`[${this.instance.id}] 所有任务已完成，任务停止`);
+        this.isStopped = true;
+        this.instance.status = TaskStatus.ERROR;
+        this.instance.endTime = new Date().toISOString();
+        if (this.updateInstanceCallback) {
+          this.updateInstanceCallback(this.instance).catch(err => {
+            console.error(`[${this.instance.id}] 更新实例状态失败:`, err.message);
+          });
+        }
+      }).catch(err => {
+        console.error(`[${this.instance.id}] 等待任务完成时出错:`, err.message);
+        this.isStopped = true;
+        this.instance.status = TaskStatus.ERROR;
+        this.instance.endTime = new Date().toISOString();
+      });
+    } else {
+      // 没有正在执行的任务，直接停止
+      this.isStopped = true;
+      this.instance.status = TaskStatus.ERROR;
+      this.instance.endTime = new Date().toISOString();
+      if (this.updateInstanceCallback) {
+        this.updateInstanceCallback(this.instance).catch(err => {
+          console.error(`[${this.instance.id}] 更新实例状态失败:`, err.message);
+        });
+      }
+      console.log(`[${this.instance.id}] 任务已停止`);
+    }
   }
 }
 

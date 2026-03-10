@@ -309,6 +309,8 @@ export function MobileTaskInstanceCard({
         return { icon: <CheckCircleOutlined />, color: 'green', text: '已完成' };
       case TaskStatus.ERROR:
         return { icon: <CloseCircleOutlined />, color: 'red', text: '出错' };
+      case TaskStatus.WARNING:
+        return { icon: <CloseCircleOutlined />, color: 'orange', text: '部分成功' };
       default:
         return { icon: <ClockCircleOutlined />, color: 'default', text: '等待中' };
     }
@@ -414,7 +416,7 @@ export function MobileTaskInstanceCard({
               停止
             </Button>
           )}
-          {onDelete && (
+          {instance.status !== TaskStatus.RUNNING && instance.status !== TaskStatus.IDLE && onDelete && (
             <Button
               size="middle"
               danger

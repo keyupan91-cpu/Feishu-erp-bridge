@@ -59,6 +59,20 @@ app.use((req, res, next) => {
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 
+// 请求日志中间件
+app.use((req, res, next) => {
+  const start = Date.now();
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] --> ${req.method} ${req.url}`);
+
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    console.log(`[${timestamp}] <-- ${req.method} ${req.url} ${res.statusCode} (${duration}ms)`);
+  });
+
+  next();
+});
+
 // 缓存中间件
 function cacheMiddleware(ttl = CACHE_TTL) {
   return (req, res, next) => {
@@ -307,11 +321,12 @@ async function saveInstanceFile(username, instance) {
     await fs.mkdir(instancesDir, { recursive: true });
   }
 
-  const taskName = instance.taskName || '未命名任务';
-  const filename = generateInstanceFileName(taskName, instance.startTime || new Date());
+  // 使用实例 ID 作为文件名，确保唯一性
+  const filename = `${instance.id}.json`;
   const filepath = path.join(instancesDir, filename);
 
   await fs.writeFile(filepath, JSON.stringify(instance, null, 2));
+  console.log(`[实例创建] ${instance.id} 已保存到文件 ${filename}`);
   return filename;
 }
 
@@ -865,15 +880,34 @@ function getLocalIP() {
 }
 
 // 启动服务器
-ensureDataDir().then(() => {
-  const localIP = getLocalIP();
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
-    console.log(`局域网访问 http://${localIP}:${PORT}`);
-    console.log(`数据存储目录：${DATA_DIR}`);
-    console.log('性能优化已启用：Gzip 压缩、响应缓存、连接池');
+ensureDataDir()
+  .then(() => {
+    const localIP = getLocalIP();
+    const server = app.listen(PORT, '0.0.0.0', () => {
+      console.log('========================================');
+      console.log(`服务器运行在 http://localhost:${PORT}`);
+      console.log(`局域网访问 http://${localIP}:${PORT}`);
+      console.log(`数据存储目录：${DATA_DIR}`);
+      console.log('性能优化已启用：Gzip 压缩、响应缓存、连接池');
+      console.log('========================================');
+    });
+
+    server.on('error', (err) => {
+      if (err.code === 'EADDRINUSE') {
+        console.error(`错误: 端口 ${PORT} 已被占用`);
+        console.error(`请运行以下命令查找并关闭占用进程:`);
+        console.error(`  netstat -ano | findstr :${PORT}`);
+        console.error(`  taskkill /F /PID <进程ID>`);
+      } else {
+        console.error('服务器启动失败:', err.message);
+      }
+      process.exit(1);
+    });
+  })
+  .catch((err) => {
+    console.error('初始化数据目录失败:', err.message);
+    process.exit(1);
   });
-});
 // ==================== 企业级账户管理 API ====================
 
 // 管理员权限验证中间件
@@ -1267,26 +1301,12 @@ async function saveInstanceCallback(instance) {
     await fs.mkdir(instancesDir, { recursive: true });
   }
 
-  // 查找现有文件
-  const files = await fs.readdir(instancesDir);
-  for (const file of files) {
-    if (file.endsWith('.json')) {
-      try {
-        const existing = JSON.parse(await fs.readFile(path.join(instancesDir, file), 'utf8'));
-        if (existing.id === instance.id) {
-          await fs.writeFile(path.join(instancesDir, file), JSON.stringify(instance, null, 2));
-          return;
-        }
-      } catch {
-        // 忽略
-      }
-    }
-  }
+  // 使用实例 ID 作为文件名
+  const filename = `${instance.id}.json`;
+  const filepath = path.join(instancesDir, filename);
 
-  // 新实例，创建新文件
-  const taskName = instance.taskName || '未命名任务';
-  const filename = generateInstanceFileName(taskName, instance.startTime || new Date());
-  await fs.writeFile(path.join(instancesDir, filename), JSON.stringify(instance, null, 2));
+  await fs.writeFile(filepath, JSON.stringify(instance, null, 2));
+  console.log(`[实例更新] ${instance.id} 状态=${instance.status}`);
 }
 
 // 保存日志回调函数
