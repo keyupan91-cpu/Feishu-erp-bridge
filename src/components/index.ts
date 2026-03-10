@@ -17,3 +17,9 @@ export type {
 // 移动端布局组件
 export { default as MobileLayout } from './MobileLayout';
 export { MobilePageHeader, MobileTaskCard as MobileTaskCardSimple } from './MobileLayout';
+
+// PC端布局组件
+export { default as MainLayout } from './MainLayout';
+
+// 帮助文档页面
+export { default as HelpPage } from './HelpPage';

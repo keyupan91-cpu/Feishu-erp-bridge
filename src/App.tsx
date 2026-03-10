@@ -64,7 +64,7 @@ import KingdeeService from './services/kingdeeService';
 import { taskExecutionApi } from './services/apiService';
 // 移动端优化导入
 import { useResponsive } from './hooks/useResponsive';
-import { BottomNavBar, TopNavBar, MobileTaskCard, MobileTaskInstanceCard } from './components';
+import { BottomNavBar, TopNavBar, MobileTaskCard, MobileTaskInstanceCard, MainLayout, HelpPage } from './components';
 import './theme.css';
 
 const { Text } = Typography;
@@ -101,6 +101,16 @@ function App() {
   // 本地状态
   const [activeTab, setActiveTab] = useState('tasks');
 
+  // Tab切换处理
+  const handleTabChange = (tab: string) => {
+    if (tab === 'help') {
+      setShowHelpPage(true);
+    } else {
+      setActiveTab(tab);
+      setShowHelpPage(false);
+    }
+  };
+
   // 当切换到监控标签页时，加载所有实例的最新日志
   useEffect(() => {
     if (activeTab === 'monitoring') {
@@ -125,6 +135,9 @@ function App() {
   const [loadedFullTaskLogs, setLoadedFullTaskLogs] = useState<any[]>([]); // 从 IndexedDB 加载的完整任务日志（用于详情弹窗）
   const [logsLoading, setLogsLoading] = useState(false);
   const [instanceLatestLogs, setInstanceLatestLogs] = useState<Map<string, { timestamp: string; message: string; level: string }>>(new Map());
+
+  // 帮助页面状态
+  const [showHelpPage, setShowHelpPage] = useState(false);
 
   // 轮询定时器引用
   const pollingIntervalsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());

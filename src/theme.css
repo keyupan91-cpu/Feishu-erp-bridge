@@ -1039,8 +1039,62 @@ html, body {
   .mobile-monitoring {
     padding-bottom: 20px;
   }
-  
+
   .mobile-debugger {
     padding-bottom: 60px;
+  }
+}
+
+/* ==================== 登录页面动画 ==================== */
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-20px) rotate(5deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* 登录页面响应式 */
+@media (max-width: 900px) {
+  .auth-page-container {
+    flex-direction: column !important;
+  }
+
+  .auth-left-panel {
+    display: none;
+  }
+
+  .auth-right-panel {
+    flex: 1 !important;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  }
+
+  .auth-form-container {
+    background: #fff;
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 400px;
   }
 }
