@@ -20,18 +20,18 @@ export interface TestConnectionResult {
 class KingdeeService {
   private username: string;
   private password: string;
-  private baseUrl: string;
+  private baseUrl: string;  // 用户输入的金蝶服务器地址
   private acctId?: string;
   private dbId?: string;
-  
+
   // Session 复用相关
   private isLoggedIn: boolean = false;
   private loginTime: number = 0;
   private readonly SESSION_TIMEOUT: number = 30 * 60 * 1000; // 30分钟 session 有效期
 
   constructor(config: KingdeeConfig) {
-    // 使用代理路径，避免跨域问题
-    this.baseUrl = '/k3cloud';
+    // 保存用户输入的服务器地址
+    this.baseUrl = config.loginParams.baseUrl || '';
     this.username = config.loginParams.username;
     this.password = config.loginParams.password;
     this.acctId = config.loginParams.acctId;
@@ -44,7 +44,7 @@ class KingdeeService {
       dbId: this.dbId ? '***' : 'empty',
     });
   }
-  
+
   // 检查 session 是否有效
   private isSessionValid(): boolean {
     if (!this.isLoggedIn) return false;
@@ -54,14 +54,14 @@ class KingdeeService {
     console.log(`Session check: ${isValid ? 'valid' : 'expired'} (${Math.floor(elapsed / 1000)}s elapsed)`);
     return isValid;
   }
-  
+
   // 标记登录成功
   private markLoggedIn(): void {
     this.isLoggedIn = true;
     this.loginTime = Date.now();
     console.log('Session marked as logged in at:', new Date(this.loginTime).toLocaleString());
   }
-  
+
   // 清除 session
   private clearSession(): void {
     this.isLoggedIn = false;
@@ -69,20 +69,34 @@ class KingdeeService {
     console.log('Session cleared');
   }
 
+  // 获取登录状态
+  getLoginStatus(): boolean {
+    return this.isSessionValid();
+  }
+
   // 登录金蝶系统
   async login(): Promise<boolean> {
     try {
-      const url = `${this.baseUrl}/Kingdee.BOS.WebApi.ServicesStub.AuthService.ValidateUser.common.kdsvc`;
+      // 使用后端代理路由
+      const url = '/K3Cloud/Kingdee.BOS.WebApi.ServicesStub.AuthService.ValidateUser.common.kdsvc';
       const acctId = this.acctId || this.dbId || '';
+
+      // 构建请求体，包含 baseUrl 用于后端代理
       const payload = {
+        baseUrl: this.baseUrl,  // 传递给后端代理
         acctID: acctId,
         username: this.username,
         password: this.password,
         lcid: 2052,
       };
 
-      console.log('Logging in to Kingdee:', url);
-      console.log('Login payload:', { acctID: acctId ? '***' : 'empty', username: this.username, password: this.password ? '***' : 'empty' });
+      console.log('Logging in to Kingdee via proxy:', url);
+      console.log('Login payload:', {
+        baseUrl: this.baseUrl,
+        acctID: acctId ? '***' : 'empty',
+        username: this.username,
+        password: this.password ? '***' : 'empty'
+      });
 
       const response = await axios.post<KingdeeResponse>(url, payload, {
         headers: {
@@ -112,7 +126,7 @@ class KingdeeService {
       console.error('金蝶登录失败:', error);
       if (error.response) {
         console.error('Error response:', error.response.data);
-        throw new Error(`登录失败: ${error.response.data?.Exception || error.message}`);
+        throw new Error(`登录失败: ${error.response.data?.Exception || error.response.data?.error || error.message}`);
       }
       throw error;
     }
@@ -149,7 +163,7 @@ class KingdeeService {
 
       if (error.response) {
         statusCode = error.response.status;
-        errorMessage = error.response.data?.Exception || error.response.data?.msg || error.message;
+        errorMessage = error.response.data?.Exception || error.response.data?.msg || error.response.data?.error || error.message;
       } else if (error.request) {
         errorMessage = '网络错误，无法连接到金蝶服务器';
       }
@@ -176,10 +190,11 @@ class KingdeeService {
         console.log('Using existing session, skip login');
       }
 
-      const url = `${this.baseUrl}/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Save.common.kdsvc`;
-      
+      const url = '/K3Cloud/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Save.common.kdsvc';
+
       // 构建验证用的payload，将ValidateFlag设为true进行验证
       const payload = {
+        baseUrl: this.baseUrl,  // 传递给后端代理
         formid: formId,
         data: {
           ...data,
@@ -203,7 +218,7 @@ class KingdeeService {
     } catch (error: any) {
       console.error('验证数据失败:', error);
       if (error.response) {
-        throw new Error(`验证失败: ${error.response.data?.Exception || error.message}`);
+        throw new Error(`验证失败: ${error.response.data?.Exception || error.response.data?.error || error.message}`);
       }
       throw error;
     }
@@ -223,8 +238,9 @@ class KingdeeService {
         console.log('Using existing session, skip login');
       }
 
-      const url = `${this.baseUrl}/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Save.common.kdsvc`;
+      const url = '/K3Cloud/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Save.common.kdsvc';
       const payload = {
+        baseUrl: this.baseUrl,  // 传递给后端代理
         formid: formId,
         data: data,
       };
@@ -264,7 +280,7 @@ class KingdeeService {
       console.error('保存数据到金蝶失败:', error);
       if (error.response) {
         const errorData = error.response.data;
-        const errorMessage = errorData?.Exception || error.message;
+        const errorMessage = errorData?.Exception || errorData?.error || error.message;
         // 创建带有响应数据的错误对象
         const enhancedError = new Error(`保存失败: ${errorMessage}`);
         (enhancedError as any).responseData = errorData;

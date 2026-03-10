@@ -12,6 +12,7 @@ import {
   Tag,
   Row,
   Col,
+  Tooltip,
 } from 'antd';
 import {
   ApiOutlined,
@@ -20,13 +21,15 @@ import {
   CopyOutlined,
   LoginOutlined,
   SendOutlined,
+  LockOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
 } from '@ant-design/icons';
 import KingdeeService from '../services/kingdeeService';
 import type { KingdeeConfig } from '../types';
 
 const { TextArea } = Input;
 const { Text, Title } = Typography;
-const { TabPane } = Tabs;
 
 // 默认登录参数
 const defaultLoginParams = {
@@ -64,6 +67,10 @@ function WebAPIDebugger() {
   const [loading, setLoading] = useState(false);
   // 当前激活的标签页
   const [activeTab, setActiveTab] = useState('login');
+  // 登录成功状态
+  const [loginSuccess, setLoginSuccess] = useState(false);
+  // 保存 KingdeeService 实例
+  const [kingdeeService, setKingdeeService] = useState<KingdeeService | null>(null);
 
   // 测试登录
   const handleTestLogin = async () => {
@@ -75,9 +82,14 @@ function WebAPIDebugger() {
       message.error('请输入用户名和密码');
       return;
     }
+    if (!loginParams.acctId) {
+      message.error('请输入账套ID');
+      return;
+    }
 
     setLoading(true);
     setTestResult(null);
+    setLoginSuccess(false);
 
     try {
       const config: KingdeeConfig = {
@@ -86,8 +98,8 @@ function WebAPIDebugger() {
         dataTemplate: '',
       };
 
-      const kingdeeService = new KingdeeService(config);
-      const result = await kingdeeService.testConnection();
+      const service = new KingdeeService(config);
+      const result = await service.testConnection();
 
       setTestResult({
         type: 'login',
@@ -99,11 +111,14 @@ function WebAPIDebugger() {
       });
 
       if (result.success) {
-        message.success('登录测试成功');
+        message.success('登录测试成功，可以进入数据测试');
+        setLoginSuccess(true);
+        setKingdeeService(service);
         // 登录成功后自动切换到数据测试标签
         setActiveTab('data');
       } else {
         message.error(result.message);
+        setKingdeeService(null);
       }
     } catch (error: any) {
       setTestResult({
@@ -114,6 +129,7 @@ function WebAPIDebugger() {
         timestamp: new Date().toISOString(),
       });
       message.error(`登录测试失败: ${error.message}`);
+      setKingdeeService(null);
     } finally {
       setLoading(false);
     }
@@ -121,6 +137,13 @@ function WebAPIDebugger() {
 
   // 测试保存数据
   const handleTestSave = async () => {
+    // 检查是否已登录
+    if (!loginSuccess || !kingdeeService) {
+      message.error('请先完成登录测试');
+      setActiveTab('login');
+      return;
+    }
+
     if (!formId) {
       message.error('请输入表单ID');
       return;
@@ -143,13 +166,6 @@ function WebAPIDebugger() {
     setTestResult(null);
 
     try {
-      const config: KingdeeConfig = {
-        loginParams,
-        formId,
-        dataTemplate,
-      };
-
-      const kingdeeService = new KingdeeService(config);
       const result = await kingdeeService.saveData(formId, parsedData);
 
       setTestResult({
@@ -175,6 +191,7 @@ function WebAPIDebugger() {
           data: parsedData,
         },
         errorMessage: error.message,
+        responseData: error.responseData,
         timestamp: new Date().toISOString(),
       });
       message.error(`数据保存失败: ${error.message}`);
@@ -198,6 +215,16 @@ function WebAPIDebugger() {
     }
   };
 
+  // 重置登录状态（当用户修改登录参数时）
+  const handleLoginParamChange = (field: string, value: string) => {
+    setLoginParams({ ...loginParams, [field]: value });
+    // 如果修改了关键参数，需要重新登录
+    if (['baseUrl', 'username', 'password', 'acctId'].includes(field)) {
+      setLoginSuccess(false);
+      setKingdeeService(null);
+    }
+  };
+
   return (
     <div style={{ padding: 24 }}>
       <Card
@@ -213,187 +240,253 @@ function WebAPIDebugger() {
       >
         <Alert
           message="独立调试工具"
-          description="此工具用于直接测试金蝶 WebAPI，与飞书数据同步功能完全独立。您可以在这里测试金蝶登录和数据保存接口。"
+          description="此工具用于直接测试金蝶 WebAPI，与飞书数据同步功能完全独立。请先完成登录测试，成功后才能进行数据测试。"
           type="info"
           showIcon
           style={{ marginBottom: 24 }}
         />
 
-        <Tabs activeKey={activeTab} onChange={setActiveTab}>
-          <TabPane
-            tab={
-              <Space>
-                <LoginOutlined />
-                登录测试
-              </Space>
+        {/* 登录状态指示器 */}
+        <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+          <Text strong>登录状态：</Text>
+          {loginSuccess ? (
+            <Tag icon={<CheckCircleOutlined />} color="success">
+              已登录
+            </Tag>
+          ) : (
+            <Tag icon={<CloseCircleOutlined />} color="error">
+              未登录
+            </Tag>
+          )}
+          {loginSuccess && (
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              服务器：{loginParams.baseUrl}
+            </Text>
+          )}
+        </div>
+
+        <Tabs
+          activeKey={activeTab}
+          onChange={(key) => {
+            // 如果切换到数据测试但未登录成功，提示用户
+            if (key === 'data' && !loginSuccess) {
+              message.warning('请先完成登录测试');
+              return;
             }
-            key="login"
-          >
-            <Card title="金蝶登录参数" size="small" style={{ marginBottom: 24 }}>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <div style={{ marginBottom: 16 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                      服务器地址
-                    </Text>
-                    <Input
-                      placeholder="例如: http://192.168.1.100:8090"
-                      value={loginParams.baseUrl}
-                      onChange={(e) =>
-                        setLoginParams({ ...loginParams, baseUrl: e.target.value })
-                      }
-                    />
-                  </div>
-                </Col>
-                <Col span={12}>
-                  <div style={{ marginBottom: 16 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                      账套 ID (AcctID)
-                    </Text>
-                    <Input
-                      placeholder="例如: 647298"
-                      value={loginParams.acctId}
-                      onChange={(e) =>
-                        setLoginParams({ ...loginParams, acctId: e.target.value })
-                      }
-                    />
-                  </div>
-                </Col>
-              </Row>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <div style={{ marginBottom: 16 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                      用户名
-                    </Text>
-                    <Input
-                      placeholder="金蝶用户名"
-                      value={loginParams.username}
-                      onChange={(e) =>
-                        setLoginParams({ ...loginParams, username: e.target.value })
-                      }
-                    />
-                  </div>
-                </Col>
-                <Col span={12}>
-                  <div style={{ marginBottom: 16 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                      密码
-                    </Text>
-                    <Input.Password
-                      placeholder="金蝶密码"
-                      value={loginParams.password}
-                      onChange={(e) =>
-                        setLoginParams({ ...loginParams, password: e.target.value })
-                      }
-                    />
-                  </div>
-                </Col>
-              </Row>
-              <Row gutter={16}>
-                <Col span={12}>
-                  <div style={{ marginBottom: 16 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                      App ID (可选)
-                    </Text>
-                    <Input
-                      placeholder="应用ID"
-                      value={loginParams.appId}
-                      onChange={(e) =>
-                        setLoginParams({ ...loginParams, appId: e.target.value })
-                      }
-                    />
-                  </div>
-                </Col>
-                <Col span={12}>
-                  <div style={{ marginBottom: 16 }}>
-                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                      App Secret (可选)
-                    </Text>
-                    <Input.Password
-                      placeholder="应用密钥"
-                      value={loginParams.appSecret}
-                      onChange={(e) =>
-                        setLoginParams({ ...loginParams, appSecret: e.target.value })
-                      }
-                    />
-                  </div>
-                </Col>
-              </Row>
+            setActiveTab(key);
+          }}
+          items={[
+            {
+              key: 'login',
+              label: (
+                <Space>
+                  <LoginOutlined />
+                  登录测试
+                  {loginSuccess && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
+                </Space>
+              ),
+              children: (
+                <Card title="金蝶登录参数" size="small" style={{ marginBottom: 24 }}>
+                  <Row gutter={16}>
+                    <Col span={24}>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                          服务器地址 <Text type="danger">*</Text>
+                        </Text>
+                        <Input
+                          placeholder="例如: http://192.168.1.100:8090"
+                          value={loginParams.baseUrl}
+                          onChange={(e) => handleLoginParamChange('baseUrl', e.target.value)}
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                          账套 ID (AcctID) <Text type="danger">*</Text>
+                        </Text>
+                        <Input
+                          placeholder="例如: 647298"
+                          value={loginParams.acctId}
+                          onChange={(e) => handleLoginParamChange('acctId', e.target.value)}
+                        />
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                          数据库 ID (DbID)
+                        </Text>
+                        <Input
+                          placeholder="可选"
+                          value={loginParams.dbId}
+                          onChange={(e) => handleLoginParamChange('dbId', e.target.value)}
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                          用户名 <Text type="danger">*</Text>
+                        </Text>
+                        <Input
+                          placeholder="金蝶用户名"
+                          value={loginParams.username}
+                          onChange={(e) => handleLoginParamChange('username', e.target.value)}
+                        />
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                          密码 <Text type="danger">*</Text>
+                        </Text>
+                        <Input.Password
+                          placeholder="金蝶密码"
+                          value={loginParams.password}
+                          onChange={(e) => handleLoginParamChange('password', e.target.value)}
+                        />
+                      </div>
+                    </Col>
+                  </Row>
+                  <Row gutter={16}>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                          App ID (可选)
+                        </Text>
+                        <Input
+                          placeholder="应用ID"
+                          value={loginParams.appId}
+                          onChange={(e) => handleLoginParamChange('appId', e.target.value)}
+                        />
+                      </div>
+                    </Col>
+                    <Col span={12}>
+                      <div style={{ marginBottom: 16 }}>
+                        <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                          App Secret (可选)
+                        </Text>
+                        <Input.Password
+                          placeholder="应用密钥"
+                          value={loginParams.appSecret}
+                          onChange={(e) => handleLoginParamChange('appSecret', e.target.value)}
+                        />
+                      </div>
+                    </Col>
+                  </Row>
 
-              <Button
-                type="primary"
-                icon={<LoginOutlined />}
-                loading={loading && activeTab === 'login'}
-                onClick={handleTestLogin}
-                size="large"
-                style={{ marginTop: 16 }}
-              >
-                测试登录
-              </Button>
-            </Card>
-          </TabPane>
-
-          <TabPane
-            tab={
-              <Space>
-                <SendOutlined />
-                数据测试
-              </Space>
-            }
-            key="data"
-          >
-            <Card title="数据保存参数" size="small" style={{ marginBottom: 24 }}>
-              <div style={{ marginBottom: 16 }}>
-                <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                  表单 ID (FormId)
-                </Text>
-                <Input
-                  placeholder="例如: BD_MATERIAL, AP_PAYBILL 等"
-                  value={formId}
-                  onChange={(e) => setFormId(e.target.value)}
-                  style={{ width: '100%' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <Text strong style={{ display: 'block', marginBottom: 8 }}>
-                  数据模板 (JSON)
-                </Text>
-                <TextArea
-                  placeholder="请输入JSON格式的数据模板"
-                  value={dataTemplate}
-                  onChange={(e) => setDataTemplate(e.target.value)}
-                  rows={15}
-                  style={{ fontFamily: 'monospace', fontSize: 13 }}
-                />
-              </div>
-
-              <Space>
-                <Button
-                  type="primary"
-                  icon={<PlayCircleOutlined />}
-                  loading={loading && activeTab === 'data'}
-                  onClick={handleTestSave}
-                  size="large"
+                  <Space>
+                    <Button
+                      type="primary"
+                      icon={<LoginOutlined />}
+                      loading={loading && activeTab === 'login'}
+                      onClick={handleTestLogin}
+                      size="large"
+                    >
+                      测试登录
+                    </Button>
+                    {loginSuccess && (
+                      <Button
+                        type="default"
+                        icon={<SendOutlined />}
+                        onClick={() => setActiveTab('data')}
+                      >
+                        进入数据测试
+                      </Button>
+                    )}
+                  </Space>
+                </Card>
+              ),
+            },
+            {
+              key: 'data',
+              label: (
+                <Tooltip title={loginSuccess ? '' : '请先完成登录测试'}>
+                  <span style={{ opacity: loginSuccess ? 1 : 0.5 }}>
+                    <Space>
+                      <SendOutlined />
+                      数据测试
+                      {!loginSuccess && <LockOutlined />}
+                    </Space>
+                  </span>
+                </Tooltip>
+              ),
+              disabled: !loginSuccess,
+              children: (
+                <Card
+                  title={
+                    <Space>
+                      <span>数据保存参数</span>
+                      <Tag color="green">
+                        已连接: {loginParams.baseUrl}
+                      </Tag>
+                    </Space>
+                  }
+                  size="small"
+                  style={{ marginBottom: 24 }}
                 >
-                  执行保存
-                </Button>
-                <Button
-                  icon={<ClearOutlined />}
-                  onClick={() => setDataTemplate('')}
-                >
-                  清空
-                </Button>
-                <Button
-                  onClick={() => setDataTemplate(defaultDataTemplate)}
-                >
-                  恢复默认
-                </Button>
-              </Space>
-            </Card>
-          </TabPane>
-        </Tabs>
+                  <div style={{ marginBottom: 16 }}>
+                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                      表单 ID (FormId)
+                    </Text>
+                    <Input
+                      placeholder="例如: BD_MATERIAL, AP_PAYBILL 等"
+                      value={formId}
+                      onChange={(e) => setFormId(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  <div style={{ marginBottom: 16 }}>
+                    <Text strong style={{ display: 'block', marginBottom: 8 }}>
+                      数据模板 (JSON)
+                    </Text>
+                    <TextArea
+                      placeholder="请输入JSON格式的数据模板"
+                      value={dataTemplate}
+                      onChange={(e) => setDataTemplate(e.target.value)}
+                      rows={15}
+                      style={{ fontFamily: 'monospace', fontSize: 13 }}
+                    />
+                  </div>
+
+                  <Space>
+                    <Button
+                      type="primary"
+                      icon={<PlayCircleOutlined />}
+                      loading={loading && activeTab === 'data'}
+                      onClick={handleTestSave}
+                      size="large"
+                    >
+                      执行保存
+                    </Button>
+                    <Button
+                      icon={<ClearOutlined />}
+                      onClick={() => setDataTemplate('')}
+                    >
+                      清空
+                    </Button>
+                    <Button
+                      onClick={() => setDataTemplate(defaultDataTemplate)}
+                    >
+                      恢复默认
+                    </Button>
+                    <Button
+                      onClick={() => setActiveTab('login')}
+                    >
+                      返回登录
+                    </Button>
+                  </Space>
+                </Card>
+              ),
+            },
+          ]}
+        />
       </Card>
 
       {/* 测试结果展示 */}
@@ -487,11 +580,32 @@ function WebAPIDebugger() {
                   </pre>
                 </div>
               ) : (
-                <Alert
-                  message={testResult.errorMessage}
-                  type="error"
-                  showIcon
-                />
+                <>
+                  <Alert
+                    message={testResult.errorMessage}
+                    type="error"
+                    showIcon
+                    style={{ marginBottom: 16 }}
+                  />
+                  {testResult.responseData && (
+                    <div style={{ marginBottom: 16 }}>
+                      <Text strong type="secondary">响应内容：</Text>
+                      <pre
+                        style={{
+                          margin: 0,
+                          padding: 12,
+                          background: '#f5f5f5',
+                          borderRadius: 4,
+                          fontSize: 12,
+                          maxHeight: 400,
+                          overflow: 'auto',
+                        }}
+                      >
+                        {JSON.stringify(testResult.responseData, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}

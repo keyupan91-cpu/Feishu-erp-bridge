@@ -35,6 +35,12 @@ cloudflared-windows-amd64.exe
 *.bak
 temp_*
 
+# Development/patch files
+*_fixed.*
+*_patch.*
+fix_*.py
+*.patch
+
 # Claude
 .claude/
 
