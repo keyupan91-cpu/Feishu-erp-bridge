@@ -180,7 +180,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     background: '#f0f2f5',
   },
   sider: {
-    background: 'linear-gradient(180deg, #1a1a2e 0%, #16213e 100%)',
+    background: 'linear-gradient(180deg, #2d3a4f 0%, #1e2a3a 100%)',
     boxShadow: '2px 0 8px rgba(0, 0, 0, 0.15)',
     position: 'relative',
   },
@@ -190,7 +190,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     alignItems: 'center',
     justifyContent: 'center',
     padding: '16px',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+    borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
   },
   logoIcon: {
     width: '40px',
@@ -210,13 +210,13 @@ const styles: { [key: string]: React.CSSProperties } = {
     flexDirection: 'column',
   },
   logoTitle: {
-    color: '#fff',
+    color: '#ffffff',
     fontSize: '16px',
     fontWeight: 600,
     letterSpacing: '1px',
   },
   logoSubtitle: {
-    color: 'rgba(255, 255, 255, 0.5)',
+    color: 'rgba(255, 255, 255, 0.7)',
     fontSize: '11px',
     letterSpacing: '0.5px',
   },
@@ -232,7 +232,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     transform: 'translateX(-50%)',
   },
   collapseIcon: {
-    color: 'rgba(255, 255, 255, 0.65)',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: '18px',
   },
   header: {

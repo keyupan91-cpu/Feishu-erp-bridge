@@ -1098,3 +1098,79 @@ html, body {
     max-width: 400px;
   }
 }
+
+/* ==================== PC端侧边栏菜单样式 ==================== */
+.ant-layout-sider .ant-menu {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.ant-layout-sider .ant-menu-item {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 15px;
+  margin: 4px 8px;
+  border-radius: 8px;
+  height: 48px;
+  line-height: 48px;
+}
+
+.ant-layout-sider .ant-menu-item:hover {
+  color: #ffffff !important;
+  background: rgba(79, 172, 254, 0.2) !important;
+}
+
+.ant-layout-sider .ant-menu-item-selected {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+}
+
+.ant-layout-sider .ant-menu-item .anticon {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 18px;
+}
+
+.ant-layout-sider .ant-menu-item-selected .anticon {
+  color: #ffffff !important;
+}
+
+.ant-layout-sider .ant-menu-item span {
+  font-weight: 500;
+}
+
+/* ==================== PC端侧边栏菜单样式 ==================== */
+.ant-layout-sider .ant-menu {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.ant-layout-sider .ant-menu-item {
+  color: rgba(255, 255, 255, 0.85) !important;
+  font-size: 15px;
+  margin: 4px 8px;
+  border-radius: 8px;
+  height: 48px;
+  line-height: 48px;
+}
+
+.ant-layout-sider .ant-menu-item:hover {
+  color: #ffffff !important;
+  background: rgba(79, 172, 254, 0.2) !important;
+}
+
+.ant-layout-sider .ant-menu-item-selected {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+  box-shadow: 0 4px 12px rgba(79, 172, 254, 0.3);
+}
+
+.ant-layout-sider .ant-menu-item .anticon {
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 18px;
+}
+
+.ant-layout-sider .ant-menu-item-selected .anticon {
+  color: #ffffff !important;
+}
+
+.ant-layout-sider .ant-menu-item span {
+  font-weight: 500;
+}

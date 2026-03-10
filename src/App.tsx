@@ -1649,153 +1649,175 @@ function App() {
   }
 
 // 桌面端视图
+// 如果显示帮助页面
+if (showHelpPage) {
+  return (
+    <MainLayout
+      activeTab={activeTab}
+      onTabChange={(tab) => { handleTabChange(tab); }}
+      onLogout={handleLogout}
+    >
+      <HelpPage onBack={() => setShowHelpPage(false)} />
+    </MainLayout>
+  );
+}
+
 return (
-  <>
-  <div className="app-container">
-    {/* 桌面端视图 - 头部 */}
-      <div className="app-header">
-        {/* 顶部艺术字区域 - 一行布局 */}
-        <div style={{ 
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 16,
-          padding: '12px 0',
-          borderBottom: '1px solid rgba(255,255,255,0.1)'
-        }}>
-          {/* 中间：金蝶数据传输平台 */}
-          <div style={{ flex: 1, textAlign: 'center' }}>
-            <h1 className="app-title" style={{ margin: 0, fontSize: 24 }}>金蝶数据传输平台</h1>
-          </div>
-          
-          {/* 右侧：用户信息 */}
-          <div style={{ minWidth: 120, textAlign: 'right' }}>
-            <p className="app-subtitle" style={{ margin: 0 }}>
-              <UserOutlined style={{ marginRight: 4 }} />
-              {currentAccount ? `${currentAccount.username}` : '未登录'}
-            </p>
-          </div>
+  <MainLayout
+    activeTab={activeTab}
+    onTabChange={handleTabChange}
+    onLogout={handleLogout}
+  >
+    {/* 操作指引 */}
+    {showGuide && currentAccount && (
+      <Card className="guide-card animate-fade-in-up" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <Text strong style={{ fontSize: 16, color: '#1a1a2e' }}>
+            <CloudSyncOutlined style={{ marginRight: 8, color: '#4facfe' }} />
+            操作指引
+          </Text>
+          <Button type="text" size="small" onClick={() => setShowGuide(false)}>
+            隐藏
+          </Button>
         </div>
-        
-        <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 12 }}>
-          <Space wrap size="middle">
-            <Button
-              icon={<ExportOutlined />}
-              onClick={handleExport}
-              size="middle"
-              style={{ background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}
-            >
-              导出数据
-            </Button>
-            <Button
-              icon={<ImportOutlined />}
-              onClick={handleImport}
-              size="middle"
-              style={{ background: 'rgba(255,255,255,0.2)', borderColor: 'rgba(255,255,255,0.3)', color: '#fff' }}
-            >
-              导入数据
-            </Button>
-            <Button
-              icon={<LogoutOutlined />}
-              onClick={handleLogout}
-              type="primary"
-              danger
-              size="middle"
-            >
-              退出登录
-            </Button>
-          </Space>
-        </div>
-      </div>
+        <Steps
+          direction="horizontal"
+          size="small"
+          current={-1}
+          items={[
+            { title: '创建任务', description: '点击新建任务，输入任务名称', icon: <PlusOutlined /> },
+            { title: '配置连接', description: '配置飞书和金蝶的连接信息', icon: <SettingOutlined /> },
+            { title: '测试连接', description: '使用下方按钮测试连接', icon: <CloudSyncOutlined /> },
+            { title: '启用执行', description: '启用任务并点击执行按钮', icon: <ThunderboltOutlined /> },
+          ]}
+        />
+      </Card>
+    )}
 
-      {/* 主内容区域 */}
-      <div style={{ flex: 1, padding: '24px 40px', overflow: 'auto' }}>
-      {/* 操作指引 */}
-      {showGuide && currentAccount && (
-        <Card className="guide-card animate-fade-in-up" style={{ marginBottom: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Text strong style={{ fontSize: 16, color: '#F5A623' }}>
-              <CloudSyncOutlined style={{ marginRight: 8 }} />
-              操作指引
-            </Text>
-            <Button type="text" size="small" onClick={() => setShowGuide(false)}>
-              隐藏
-            </Button>
+    {/* 概览看板 */}
+    <Row gutter={24} style={{ marginBottom: 24 }}>
+      <Col span={6}>
+        <Card className="stat-card" bodyStyle={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 56,
+              height: 56,
+              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              borderRadius: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 8px 24px rgba(79, 172, 254, 0.3)',
+            }}>
+              <UnorderedListOutlined style={{ fontSize: 28, color: '#fff' }} />
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 13 }}>总任务数</Text>
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#1a1a2e' }}>{tasks.length}</div>
+            </div>
           </div>
-          <Steps
-            direction="horizontal"
-            size="small"
-            current={-1}
-            items={[
-              { title: '创建任务', description: '点击新建任务，输入任务名称', icon: <PlusOutlined /> },
-              { title: '配置连接', description: '配置飞书和金蝶的连接信息', icon: <SettingOutlined /> },
-              { title: '测试连接', description: '使用下方按钮测试连接', icon: <CloudSyncOutlined /> },
-              { title: '启用执行', description: '启用任务并点击执行按钮', icon: <ThunderboltOutlined /> },
-            ]}
-          />
         </Card>
-      )}
+      </Col>
+      <Col span={6}>
+        <Card className="stat-card" bodyStyle={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 56,
+              height: 56,
+              background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
+              borderRadius: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 8px 24px rgba(82, 196, 26, 0.3)',
+            }}>
+              <CheckCircleOutlined style={{ fontSize: 28, color: '#fff' }} />
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 13 }}>今日执行</Text>
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#52c41a' }}>
+                {taskInstances.filter(i => i.startTime && new Date(i.startTime).toDateString() === new Date().toDateString()).length}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </Col>
+      <Col span={6}>
+        <Card className="stat-card" bodyStyle={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 56,
+              height: 56,
+              background: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
+              borderRadius: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 8px 24px rgba(255, 77, 79, 0.3)',
+            }}>
+              <CloseCircleOutlined style={{ fontSize: 28, color: '#fff' }} />
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 13 }}>今日失败</Text>
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#ff4d4f' }}>
+                {taskInstances.filter(i =>
+                  i.startTime &&
+                  new Date(i.startTime).toDateString() === new Date().toDateString() &&
+                  i.status === TaskStatus.ERROR
+                ).length}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </Col>
+      <Col span={6}>
+        <Card className="stat-card" bodyStyle={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{
+              width: 56,
+              height: 56,
+              background: 'linear-gradient(135deg, #fa8c16 0%, #ffc53d 100%)',
+              borderRadius: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 8px 24px rgba(250, 140, 22, 0.3)',
+            }}>
+              <ThunderboltOutlined style={{ fontSize: 28, color: '#fff' }} />
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 13 }}>已启用</Text>
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#fa8c16' }}>
+                {tasks.filter(t => t.enabled).length}
+              </div>
+            </div>
+          </div>
+        </Card>
+      </Col>
+    </Row>
 
-      {/* 概览看板 */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={8}>
-          <Card className="stat-card" bodyStyle={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <Text type="secondary" style={{ fontSize: 14 }}>总任务数</Text>
-                <div style={{ fontSize: 32, fontWeight: 'bold', color: '#1890ff', marginTop: 8 }}>{tasks.length}</div>
-              </div>
-              <div style={{ width: 48, height: 48, background: '#E6F7FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <UnorderedListOutlined style={{ fontSize: 24, color: '#1890ff' }} />
-              </div>
-            </div>
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card className="stat-card" bodyStyle={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <Text type="secondary" style={{ fontSize: 14 }}>今日执行</Text>
-                <div style={{ fontSize: 32, fontWeight: 'bold', color: '#52c41a', marginTop: 8 }}>
-                  {taskInstances.filter(i => i.startTime && new Date(i.startTime).toDateString() === new Date().toDateString()).length}
-                </div>
-              </div>
-              <div style={{ width: 48, height: 48, background: '#F6FFED', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CheckCircleOutlined style={{ fontSize: 24, color: '#52c41a' }} />
-              </div>
-            </div>
-          </Card>
-        </Col>
-        <Col span={8}>
-          <Card className="stat-card" bodyStyle={{ padding: '20px 24px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div>
-                <Text type="secondary" style={{ fontSize: 14 }}>今日失败</Text>
-                <div style={{ fontSize: 32, fontWeight: 'bold', color: '#ff4d4f', marginTop: 8 }}>
-                  {taskInstances.filter(i => 
-                    i.startTime && 
-                    new Date(i.startTime).toDateString() === new Date().toDateString() &&
-                    i.status === TaskStatus.ERROR
-                  ).length}
-                </div>
-              </div>
-              <div style={{ width: 48, height: 48, background: '#FFF1F0', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <CloseCircleOutlined style={{ fontSize: 24, color: '#ff4d4f' }} />
-              </div>
-            </div>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* 标签页 */}
-      <Tabs activeKey={activeTab} onChange={setActiveTab} className="custom-tabs">
-        <TabPane
-          tab={<span><UnorderedListOutlined />任务管理</span>}
-          key="tasks"
-        >
-          <Card className="custom-card">
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text strong style={{ fontSize: 16 }}>任务列表</Text>
+    {/* 标签页 */}
+    <Tabs activeKey={activeTab} onChange={handleTabChange} className="custom-tabs">
+      <TabPane
+        tab={<span><UnorderedListOutlined />任务管理</span>}
+        key="tasks"
+      >
+        <Card className="custom-card">
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text strong style={{ fontSize: 16 }}>任务列表</Text>
+            <Space>
+              <Button
+                icon={<ExportOutlined />}
+                onClick={handleExport}
+              >
+                导出
+              </Button>
+              <Button
+                icon={<ImportOutlined />}
+                onClick={handleImport}
+              >
+                导入
+              </Button>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -1807,36 +1829,37 @@ return (
               >
                 新建任务
               </Button>
-            </div>
-            <Table
-              columns={taskColumns}
-              dataSource={tasks.map((task) => ({ ...task, key: task.id }))}
-              pagination={{ pageSize: 10 }}
-              className="custom-table"
-              scroll={{ x: 800 }}
-              locale={{ emptyText: <Empty description="暂无任务，点击上方按钮创建新任务" /> }}
-            />
-          </Card>
-        </TabPane>
+            </Space>
+          </div>
+          <Table
+            columns={taskColumns}
+            dataSource={tasks.map((task) => ({ ...task, key: task.id }))}
+            pagination={{ pageSize: 10 }}
+            className="custom-table"
+            scroll={{ x: 800 }}
+            locale={{ emptyText: <Empty description="暂无任务，点击上方按钮创建新任务" /> }}
+          />
+        </Card>
+      </TabPane>
 
-        <TabPane
-          tab={<span><HistoryOutlined />执行监控</span>}
-          key="monitoring"
-        >
-          <Card className="custom-card">
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text strong style={{ fontSize: 16 }}>执行记录</Text>
-              <Button icon={<ClearOutlined />} onClick={handleClearInstances} disabled={taskInstances.length === 0}>
-                清空记录
-              </Button>
-            </div>
-            <Table
-              columns={monitoringColumns}
-              dataSource={taskInstances.map((instance) => ({
-                key: instance.id,
-                taskName: tasks.find((t) => t.id === instance.taskId)?.name || 'Unknown',
-                status: instance.status,
-                progress: instance.progress,
+      <TabPane
+        tab={<span><HistoryOutlined />执行监控</span>}
+        key="monitoring"
+      >
+        <Card className="custom-card">
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text strong style={{ fontSize: 16 }}>执行记录</Text>
+            <Button icon={<ClearOutlined />} onClick={handleClearInstances} disabled={taskInstances.length === 0}>
+              清空记录
+            </Button>
+          </div>
+          <Table
+            columns={monitoringColumns}
+            dataSource={taskInstances.map((instance) => ({
+              key: instance.id,
+              taskName: tasks.find((t) => t.id === instance.taskId)?.name || 'Unknown',
+              status: instance.status,
+              progress: instance.progress,
                 startTime: instance.startTime,
                 instance,
               }))}
@@ -1855,10 +1878,8 @@ return (
           <WebAPIDebugger />
         </TabPane>
       </Tabs>
-      </div>
-    </div>
 
-    {/* 通用 Modal 组件 - 桌面端也需渲染 */}
+    {/* 通用 Modal 组件 */}
     {/* 新建/编辑任务弹窗 */}
     <Modal
       open={isModalOpen}
@@ -2245,8 +2266,8 @@ return (
         )}
       </div>
     </Modal>
-
-  </>);
+  </MainLayout>
+  );
 }
 
 export default App;
