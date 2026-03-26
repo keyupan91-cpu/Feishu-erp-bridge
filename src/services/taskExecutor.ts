@@ -4,7 +4,7 @@ import type { TaskConfig, TaskInstance, TaskLog, WebAPILog } from '../types';
 import { TaskStatus } from '../types';
 import { useAccountStore } from '../stores/accountStore';
 import { logStorage } from './logStorage';
-import { formatDate, extractTextValue, FeishuFieldType } from '../utils/fieldTypeUtils';
+import { extractFeishuFieldValue as extractFeishuValue, formatFeishuFieldValue } from '../utils/feishuValueUtils';
 
 // 任务执行器类
 export class TaskExecutor {
@@ -456,109 +456,20 @@ export class TaskExecutor {
   }
 
   // 提取飞书字段的实际值（处理多行文本等复杂类型）
-  private extractFeishuFieldValue(fieldValue: any): any {
-    if (fieldValue === null || fieldValue === undefined) {
-      return '';
-    }
-
-    // 如果是简单类型（数字、字符串、布尔值），直接返回
-    if (typeof fieldValue === 'number' || typeof fieldValue === 'string' || typeof fieldValue === 'boolean') {
-      return fieldValue;
-    }
-
-    // 如果是数组（如公司主体 [{text: '...', type: 'text'}]）
-    if (Array.isArray(fieldValue)) {
-      // 提取所有 text 值并拼接
-      const texts = fieldValue.map(item => {
-        if (typeof item === 'object' && item.text) {
-          return item.text;
-        }
-        return String(item);
-      }).join('');
-      return texts;
-    }
-
-    // 如果是对象（大多数飞书字段格式）
-    if (typeof fieldValue === 'object') {
-      // 尝试提取 value 字段（可能是数组）
-      if (fieldValue.value && Array.isArray(fieldValue.value)) {
-        // 返回数组的第一个值
-        return fieldValue.value[0];
-      }
-      // 尝试提取 text 字段
-      if (fieldValue.text) {
-        return fieldValue.text;
-      }
-      // 尝试提取 value 字段（单个值）
-      if (fieldValue.value !== undefined) {
-        return fieldValue.value;
-      }
-      // 返回 JSON 字符串
-      return JSON.stringify(fieldValue);
-    }
-
-    return fieldValue;
+  private extractFeishuFieldValue(fieldValue: any, sourceFieldType?: number): any {
+    return extractFeishuValue(fieldValue, sourceFieldType);
   }
 
   // 根据处理类型格式化字段值
   private formatFieldValue(fieldValue: any, param: import('../types').FeishuFieldParam, sourceFieldType?: number): any {
-    const processType = param.processType || 'auto';
-
-    // 自动检测处理类型
-    let effectiveType = processType;
-    if (processType === 'auto' && sourceFieldType !== undefined) {
-      // 根据飞书字段类型自动检测
-      if (sourceFieldType === FeishuFieldType.NUMBER) {
-        effectiveType = 'number';
-      } else if (sourceFieldType === FeishuFieldType.DATE ||
-                 sourceFieldType === FeishuFieldType.CREATED_TIME ||
-                 sourceFieldType === FeishuFieldType.MODIFIED_TIME) {
-        effectiveType = 'datetime';
-      } else if (sourceFieldType === FeishuFieldType.MULTI_SELECT ||
-                 sourceFieldType === FeishuFieldType.PERSON ||
-                 sourceFieldType === FeishuFieldType.GROUP_CHAT) {
-        effectiveType = processType === 'auto' ? 'text' : processType;
-      }
-    }
-
-    // 根据处理类型格式化
-    switch (effectiveType) {
-      case 'number':
-        if (typeof fieldValue === 'number') {
-          const decimalPlaces = param.decimalPlaces ?? 2;
-          return Number(fieldValue.toFixed(decimalPlaces));
-        }
-        // 尝试转换为数字
-        const numValue = Number(fieldValue);
-        if (!isNaN(numValue)) {
-          const decimalPlaces = param.decimalPlaces ?? 2;
-          return Number(numValue.toFixed(decimalPlaces));
-        }
-        return fieldValue;
-
-      case 'date':
-      case 'datetime':
-        return formatDate(fieldValue, param.dateFormat || 'YYYY-MM-DD');
-
-      case 'timestamp':
-        if (typeof fieldValue === 'number') {
-          return String(fieldValue);
-        }
-        if (typeof fieldValue === 'string') {
-          const parsed = Date.parse(fieldValue);
-          return isNaN(parsed) ? fieldValue : String(parsed);
-        }
-        return String(fieldValue);
-
-      case 'multiselect':
-      case 'person':
-        // 多选、人员字段：提取所有文本值，逗号分隔
-        return extractTextValue(fieldValue);
-
-      default:
-        // text、select、checkbox、phone 等：返回原始提取值
-        return fieldValue;
-    }
+    const extractedValue = this.extractFeishuFieldValue(fieldValue, sourceFieldType);
+    return formatFeishuFieldValue(extractedValue, {
+      processType: param.processType,
+      sourceFieldType,
+      sourceUiType: param.sourceUiType,
+      decimalPlaces: param.decimalPlaces,
+      dateFormat: param.dateFormat,
+    });
   }
 
   // 格式化数据为金蝶格式
@@ -577,11 +488,8 @@ export class TaskExecutor {
       // 如果有 sourceFieldType，使用配置的；否则尝试自动检测
       const sourceFieldType = param.sourceFieldType;
 
-      // 提取原始值
-      let fieldValue = this.extractFeishuFieldValue(rawFieldValue);
-
-      // 根据处理类型格式化
-      fieldValue = this.formatFieldValue(fieldValue, param, sourceFieldType);
+      // 提取并格式化字段值（包含 auto 自动推断逻辑）
+      const fieldValue = this.formatFieldValue(rawFieldValue, param, sourceFieldType);
 
       if (fieldValue !== undefined && fieldValue !== null && fieldValue !== '') {
         result[param.variableName] = fieldValue;

@@ -1,4 +1,4 @@
-import express from 'express';
+﻿import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
@@ -12,16 +12,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const require = createRequire(import.meta.url);
 
-// 性能优化：使用内存缓存减少文件读取
+// 閹嗗厴娴兼ê瀵查敍姘▏閻劌鍞寸€涙绱︾€涙ê噺灏戞枃浠惰鍙?
 const cache = new Map();
-const CACHE_TTL = 5000; // 5 秒缓存
+const CACHE_TTL = 5000; // 5 缁夋帞绱︾€?
 
 const app = express();
 const PORT = 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'kingdee-sync-secret-key-2024';
 const DATA_DIR = path.join(__dirname, 'data');
 
-// 压缩中间件 - 减少传输数据量
+// 閸樺缂夋稉顓㈡？娴?- 閸戝繐鐨导鐘虹翻閺佺増宓侀柌?
 app.use((req, res, next) => {
   const gzip = require('zlib').gzip;
   const origWrite = res.write.bind(res);
@@ -55,11 +55,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// 中间件
+// 涓棿浠?
 app.use(cors());
 app.use(express.json({ limit: '100mb' }));
 
-// 请求日志中间件
+// 鐠囬攱鐪伴弮銉ョ箶娑擃參妫挎禒?
 app.use((req, res, next) => {
   const start = Date.now();
   const timestamp = new Date().toISOString();
@@ -73,7 +73,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// 缓存中间件
+// 缂傛挸鐡ㄦ稉顓㈡？娴?
 function cacheMiddleware(ttl = CACHE_TTL) {
   return (req, res, next) => {
     if (req.method !== 'GET') return next();
@@ -85,7 +85,7 @@ function cacheMiddleware(ttl = CACHE_TTL) {
       return res.json(cached.data);
     }
 
-    // 拦截响应
+    // 鎷︽埅鍝嶅簲
     const origJson = res.json.bind(res);
     res.json = (data) => {
       cache.set(cacheKey, { data, timestamp: Date.now() });
@@ -106,7 +106,7 @@ setInterval(() => {
   }
 }, CACHE_TTL * 2);
 
-// 确保数据目录存在
+// 绾喕绻氶弫鐗堝祦閻╊喖缍嶇€涙ê婀?
 async function ensureDataDir() {
   try {
     await fs.access(DATA_DIR);
@@ -115,39 +115,39 @@ async function ensureDataDir() {
   }
 }
 
-// 获取账户主文件路径
+// 閼惧嘲褰囩拹锔藉煕娑撶粯鏋冩禒鎯扮熅瀵?
 function getAccountFilePath(username) {
   return path.join(DATA_DIR, `${username}.json`);
 }
 
-// 获取账户执行记录目录
+// 鑾峰彇璐︽埛鎵ц璁板綍鐩綍
 function getAccountInstancesDir(username) {
   return path.join(DATA_DIR, `${username}_instances`);
 }
 
-// 获取账户日志目录
+// 鑾峰彇璐︽埛鏃ュ織鐩綍
 function getAccountLogsDir(username) {
   return path.join(DATA_DIR, `${username}_logs`);
 }
 
-// 获取日志文件路径
+// 閼惧嘲褰囬弮銉ョ箶閺傚洣娆㈢捄顖氱窞
 function getLogFilePath(username, instanceId) {
   return path.join(getAccountLogsDir(username), `${instanceId}.json`);
 }
 
-// 获取执行记录文件路径
+// 閼惧嘲褰囬幍褑顢戠拋鏉跨秿閺傚洣娆㈢捄顖氱窞
 function getInstanceFilePath(username, filename) {
   return path.join(getAccountInstancesDir(username), filename);
 }
 
-// 生成执行记录文件名
+// 閻㈢喐鍨氶幍褑顢戠拋鏉跨秿閺傚洣娆㈤崥?
 function generateInstanceFileName(taskName, startTime) {
   const sanitizedName = taskName.replace(/[^a-zA-Z0-9\u4e00-\u9fa5]/g, '_');
   const timestamp = new Date(startTime).toISOString().replace(/[:.]/g, '-');
   return `${sanitizedName}_${timestamp}.json`;
 }
 
-// 验证 Token 中间件 - 优化：使用缓存验证结果
+// 妤犲矁鐦?Token 涓棿浠?- 娴兼ê瀵查敍姘▏閻劎绱︾€涙﹢鐛欑拠浣虹波閺?
 const tokenCache = new Map();
 function authMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -155,7 +155,7 @@ function authMiddleware(req, res, next) {
     return res.status(401).json({ error: '未提供认证令牌' });
   }
 
-  // 检查缓存
+  // 濡偓閺屻儳绱︾€?
   const cached = tokenCache.get(token);
   if (cached && Date.now() - cached.timestamp < 60000) {
     req.user = cached.user;
@@ -173,7 +173,7 @@ function authMiddleware(req, res, next) {
   }
 }
 
-// 保存 WebAPI 日志 - 只保存第一条记录的日志
+// 娣囨繂鐡?WebAPI 閺冦儱绻?- 閸欘亙绻氱€涙顑囨稉鈧弶陇顔囪ぐ鏇犳畱閺冦儱绻?
 async function saveWebApiLog(username, instanceId, logData) {
   const logsDir = getAccountLogsDir(username);
 
@@ -185,13 +185,13 @@ async function saveWebApiLog(username, instanceId, logData) {
 
   const logFilePath = getLogFilePath(username, instanceId);
 
-  // 检查是否已存在日志文件，如果存在则不再保存（只保存第一条）
+  // 濡偓閺屻儲妲搁崥锕€鍑＄€涙ê婀弮銉ョ箶閺傚洣娆㈤敍灞筋洤閺嬫粌鐡ㄩ崷銊ュ灟娑撳秴鍟€娣囨繂鐡ㄩ敍鍫濆涧娣囨繂鐡ㄧ粭顑跨閺夆槄绱?
   try {
     await fs.access(logFilePath);
-    console.log(`日志文件已存在，跳过保存: ${instanceId}`);
+    console.log(`閺冦儱绻旈弬鍥︽瀹告彃鐡ㄩ崷顭掔礉鐠哄疇绻冩穱婵嗙摠: ${instanceId}`);
     return false;
   } catch {
-    // 文件不存在，可以保存
+    // 閺傚洣娆㈡稉宥呯摠閸︻煉绱濋崣顖欎簰娣囨繂鐡?
   }
 
   const logEntry = {
@@ -202,11 +202,11 @@ async function saveWebApiLog(username, instanceId, logData) {
   };
 
   await fs.writeFile(logFilePath, JSON.stringify(logEntry, null, 2));
-  console.log(`WebAPI 日志已保存: ${instanceId}`);
+  console.log(`WebAPI 閺冦儱绻斿韫箽鐎? ${instanceId}`);
   return true;
 }
 
-// 获取日志
+// 鑾峰彇鏃ュ織
 async function getWebApiLog(username, instanceId) {
   const logFilePath = getLogFilePath(username, instanceId);
 
@@ -218,7 +218,7 @@ async function getWebApiLog(username, instanceId) {
   }
 }
 
-// 删除日志
+// 鍒犻櫎鏃ュ織
 async function deleteWebApiLog(username, instanceId) {
   const logFilePath = getLogFilePath(username, instanceId);
 
@@ -230,7 +230,7 @@ async function deleteWebApiLog(username, instanceId) {
   }
 }
 
-// 初始化账户数据结构
+// 閸掓繂顫愰崠鏍閹撮攱鏆熼幑顔剧波閺?
 async function initAccountData(username) {
   const accountPath = getAccountFilePath(username);
   const instancesDir = getAccountInstancesDir(username);
@@ -260,7 +260,7 @@ async function initAccountData(username) {
   }
 }
 
-// 读取账户数据 - 优化：并行读取文件
+// 鐠囪褰囩拹锔藉煕閺佺増宓?- 娴兼ê瀵查敍姘嫙鐞涘矁顕伴崣鏍ㄦ瀮娴?
 async function readAccountData(username) {
   const accountPath = getAccountFilePath(username);
   const instancesDir = getAccountInstancesDir(username);
@@ -273,7 +273,7 @@ async function readAccountData(username) {
       await fs.access(instancesDir);
       const files = await fs.readdir(instancesDir);
 
-      // 并行读取所有执行记录文件
+      // 楠炴儼顢戠拠璇插絿閹碘偓閺堝墽琛岃褰曟枃浠?
       const readPromises = files
         .filter(f => f.endsWith('.json'))
         .map(async (file) => {
@@ -287,19 +287,19 @@ async function readAccountData(username) {
       const results = await Promise.all(readPromises);
       results.filter(r => r).forEach(r => taskInstances.push(r));
     } catch {
-      // 目录不存在或为空
+      // 閻╊喖缍嶆稉宥呯摠閸︺劍鍨ㄦ稉铏光敄
     }
 
-    // 按开始时间排序
+    // 閹稿绱戞慨瀣闂存帓搴?
     taskInstances.sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
 
     return { ...data, taskInstances };
   } catch (error) {
-    throw new Error('读取账户数据失败');
+    throw new Error('璇诲彇璐︽埛鏁版嵁澶辫触');
   }
 }
 
-// 保存账户主数据
+// 娣囨繂鐡ㄧ拹锔藉煕娑撶粯鏆熼幑?
 async function saveAccountData(username, data) {
   const accountPath = getAccountFilePath(username);
   const { taskInstances, ...accountData } = data;
@@ -310,7 +310,7 @@ async function saveAccountData(username, data) {
   );
 }
 
-// 保存单个执行记录 - 优化：使用批量写入
+// 娣囨繂鐡ㄩ崡鏇氶嚋閹笛嗩攽鐠佹澘缍?- 娴兼ê瀵查敍姘▏閻劍澹掗柌蹇撳晸閸?
 const writeQueue = new Map();
 async function saveInstanceFile(username, instance) {
   const instancesDir = getAccountInstancesDir(username);
@@ -321,7 +321,7 @@ async function saveInstanceFile(username, instance) {
     await fs.mkdir(instancesDir, { recursive: true });
   }
 
-  // 使用实例 ID 作为文件名，确保唯一性
+  // 娴ｈ法鏁ょ€圭偘绶?ID 娴ｆ粈璐熼弬鍥︽鍚嶏紝纭繚鍞竴鎬?
   const filename = `${instance.id}.json`;
   const filepath = path.join(instancesDir, filename);
 
@@ -330,7 +330,7 @@ async function saveInstanceFile(username, instance) {
   return filename;
 }
 
-// 删除执行记录文件
+// 閸掔娀娅庨幍褑顢戠拋鏉跨秿閺傚洣娆?
 async function deleteInstanceFile(username, instanceId) {
   const instancesDir = getAccountInstancesDir(username);
 
@@ -347,19 +347,19 @@ async function deleteInstanceFile(username, instanceId) {
         const instance = JSON.parse(await fs.readFile(path.join(instancesDir, file), 'utf8'));
         if (instance.id === instanceId) {
           await fs.unlink(path.join(instancesDir, file));
-          // 同时删除关联的日志文件
+          // 閸氬本妞傞崚鐘绘珟閸忓疇浠堥惃鍕）韫囨枃浠?
           await deleteWebApiLog(username, instanceId);
           return true;
         }
       } catch {
-        // 忽略读取失败的文件
+        // 韫囩晫鏆愮拠璇插絿婢惰精瑙﹂惃鍕瀮娴?
       }
     }
   }
   return false;
 }
 
-// 删除任务的所有执行记录
+// 閸掔娀娅庢禒璇插閻ㄥ嫭澧嶉張澶嬪⒔鐞涘矁顔囪ぐ?
 async function deleteTaskInstances(username, taskId) {
   const instancesDir = getAccountInstancesDir(username);
   let deletedCount = 0;
@@ -389,7 +389,7 @@ async function deleteTaskInstances(username, taskId) {
   return deletedCount;
 }
 
-// 注册账户
+// 娉ㄥ唽璐︽埛
 app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -404,7 +404,7 @@ app.post('/api/auth/register', async (req, res) => {
       await fs.access(accountPath);
       return res.status(409).json({ error: '用户名已存在' });
     } catch {
-      // 文件不存在，可以创建
+      // 閺傚洣娆㈡稉宥呯摠閸︻煉绱濋崣顖欎簰閸掓稑缂?
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -442,7 +442,7 @@ app.post('/api/auth/register', async (req, res) => {
     });
   } catch (error) {
     console.error('注册失败:', error);
-    res.status(500).json({ error: '注册失败：' + error.message });
+    res.status(500).json({ error: '注册失败: ' + error.message });
   }
 });
 
@@ -484,7 +484,7 @@ app.post('/api/auth/login', async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    // 清除该用户的缓存
+    // 娓呴櫎璇ョ敤鎴风殑缂撳瓨
     for (const [key] of cache.entries()) {
       if (key.includes(username)) {
         cache.delete(key);
@@ -508,7 +508,7 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (error) {
     console.error('登录失败:', error);
-    res.status(500).json({ error: '登录失败：' + error.message });
+    res.status(500).json({ error: '登录失败: ' + error.message });
   }
 });
 
@@ -528,18 +528,18 @@ app.get('/api/data', cacheMiddleware(3000), authMiddleware, async (req, res) => 
   }
 });
 
-// 保存数据 - 优化：批量写入
+// 娣囨繂鐡ㄩ弫鐗堝祦 - 娴兼ê瀵查敍姘閲忓啓鍏?
 app.post('/api/data', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
     const { tasks, taskInstances } = req.body;
 
-    // 保存主数据
+    // 娣囨繂鐡ㄦ稉缁樻殶閹?
     const accountData = await readAccountData(username);
     accountData.tasks = tasks || [];
     await saveAccountData(username, accountData);
 
-    // 保存执行记录
+    // 娣囨繂鐡ㄩ幍褑顢戠拋鏉跨秿
     if (taskInstances && taskInstances.length > 0) {
       const instancesDir = getAccountInstancesDir(username);
       let existingFiles = new Map();
@@ -554,10 +554,10 @@ app.post('/api/data', authMiddleware, async (req, res) => {
           }
         }
       } catch {
-        // 目录不存在
+        // 閻╊喖缍嶆稉宥呯摠閸?
       }
 
-      // 并行保存所有执行记录
+      // 楠炴儼顢戞穱婵嗙摠閹碘偓閺堝澧界悰宀冾唶瑜?
       const savePromises = taskInstances.map(async (instance) => {
         const existingFile = existingFiles.get(instance.id);
         const task = tasks?.find(t => t.id === instance.taskId);
@@ -577,11 +577,11 @@ app.post('/api/data', authMiddleware, async (req, res) => {
     res.json({ success: true, message: '数据保存成功' });
   } catch (error) {
     console.error('保存数据失败:', error);
-    res.status(500).json({ error: '保存数据失败：' + error.message });
+    res.status(500).json({ error: '保存数据失败: ' + error.message });
   }
 });
 
-// 删除单个执行记录
+// 閸掔娀娅庨崡鏇氶嚋閹笛嗩攽鐠佹澘缍?
 app.delete('/api/instances/:instanceId', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -600,7 +600,7 @@ app.delete('/api/instances/:instanceId', authMiddleware, async (req, res) => {
   }
 });
 
-// 删除任务及其所有执行记录
+// 閸掔娀娅庢禒璇插閸欏﹤鍙鹃幍鈧張澶嬪⒔鐞涘矁顔囪ぐ?
 app.delete('/api/tasks/:taskId', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -610,7 +610,7 @@ app.delete('/api/tasks/:taskId', authMiddleware, async (req, res) => {
 
     res.json({
       success: true,
-      message: `任务及 ${deletedCount} 条执行记录已删除`
+      message: `任务删除成功，共删除 ${deletedCount} 条执行记录`
     });
   } catch (error) {
     console.error('删除任务失败:', error);
@@ -673,11 +673,11 @@ app.post('/api/import', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('导入数据失败:', error);
-    res.status(500).json({ error: '导入数据失败：' + error.message });
+    res.status(500).json({ error: '导入数据失败: ' + error.message });
   }
 });
 
-// 删除账户
+// 鍒犻櫎璐︽埛
 app.delete('/api/account', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -713,7 +713,7 @@ app.delete('/api/account', authMiddleware, async (req, res) => {
   }
 });
 
-// 代理飞书 API 请求 - 优化：连接复用
+// 娴狅絿鎮婃炰功 API 鐠囬攱鐪?- 娴兼ê寲锛氳繛鎺ュ鐢?
 const feishuAgent = new (require('https')).Agent({
   keepAlive: true,
   maxSockets: 50,
@@ -723,21 +723,21 @@ app.all('/open-apis/*', async (req, res) => {
   try {
     const targetUrl = `https://open.feishu.cn${req.path}`;
 
-    // 构建请求体，确保正确传递 params
+    // 閺嬪嫬缂撶拠閿嬬湴娴ｆ搫绱濈涵顔荤箽濮濓絿鈥樻导鐘烩偓?params
     let bodyData = undefined;
     if (req.method !== 'GET' && req.method !== 'HEAD') {
-      // 合并 query params 和 body
+      // 閸氬牆鑻?query params 閸?body
       bodyData = {
         ...req.body,
         ...req.query,
       };
-      // 如果请求体为空对象，设为 undefined
+      // 婵″倹鐏夌拠閿嬬湴娴ｆ挷璐熺粚鍝勵嚠鐠炩槄绱濈拋鍙ヨ礋 undefined
       if (Object.keys(bodyData).length === 0) {
         bodyData = undefined;
       }
     }
 
-    console.log('飞书代理请求:', {
+    console.log('椋炰功浠ｇ悊璇锋眰:', {
       url: targetUrl,
       method: req.method,
       path: req.path,
@@ -757,7 +757,7 @@ app.all('/open-apis/*', async (req, res) => {
 
     const data = await response.json();
 
-    console.log('飞书代理响应:', {
+    console.log('椋炰功浠ｇ悊鍝嶅簲:', {
       status: response.status,
       code: data.code,
       msg: data.msg,
@@ -765,94 +765,179 @@ app.all('/open-apis/*', async (req, res) => {
 
     res.status(response.status).json(data);
   } catch (error) {
-    console.error('飞书代理请求失败:', error);
-    res.status(500).json({ error: '代理请求失败：' + error.message });
+    console.error('椋炰功代理请求失败:', error);
+    res.status(500).json({ error: '代理请求失败: ' + error.message });
   }
 });
 
-// 代理金蝶 API 请求 - 优化：连接复用，正确处理 Cookie
+// 娴狅絿鎮婇柌鎴ｆ緩 API 鐠囬攱鐪?- 娴兼ê瀵查敍姘崇箾閹恒儱顦查悽顭掔礉濮濓絿鈥樻径鍕倞 Cookie
 const kingdeeAgent = new (require('http')).Agent({
   keepAlive: true,
   maxSockets: 50,
 });
 
-// 金蝶 Session Cookie 存储（按用户存储）
+// 金蝶 Session Cookie 瀛樺偍锛堟寜鐢ㄦ埛瀛樺偍锛?
 const kingdeeSessions = new Map();
+
+function extractCookiePairsFromSetCookie(setCookieHeaders) {
+  if (!setCookieHeaders) {
+    return '';
+  }
+  const cookieList = Array.isArray(setCookieHeaders) ? setCookieHeaders : [setCookieHeaders];
+  return cookieList
+    .map(cookie => String(cookie).split(';')[0]?.trim())
+    .filter(Boolean)
+    .join('; ');
+}
+
+function getSetCookieArray(headers) {
+  if (!headers) {
+    return [];
+  }
+  if (typeof headers.getSetCookie === 'function') {
+    const cookies = headers.getSetCookie();
+    if (Array.isArray(cookies) && cookies.length > 0) {
+      return cookies;
+    }
+  }
+  const setCookieRaw = headers.get('set-cookie');
+  if (!setCookieRaw) {
+    return [];
+  }
+  // Fallback split for combined Set-Cookie header.
+  return setCookieRaw.split(/,(?=\s*[^;,=\s]+=[^;,]+)/g).map(item => item.trim()).filter(Boolean);
+}
+
+function normalizeEncodingAlias(encoding) {
+  if (!encoding) {
+    return 'utf-8';
+  }
+  const normalized = String(encoding).trim().toLowerCase();
+  if (normalized === 'utf8') return 'utf-8';
+  if (normalized === 'gb2312') return 'gbk';
+  if (normalized === 'gb18030') return 'gbk';
+  return normalized;
+}
+
+function decodeBufferByEncoding(buffer, encoding) {
+  try {
+    const decoder = new TextDecoder(normalizeEncodingAlias(encoding));
+    return decoder.decode(buffer);
+  } catch {
+    return null;
+  }
+}
 
 app.all('/K3Cloud/*', async (req, res) => {
   try {
-    let baseUrl = req.body.baseUrl || 'http://47.113.148.159:8090';
-    // 从 baseUrl 中去除可能存在的 /K3Cloud 后缀，避免重复
+    const incomingBody = req.body && typeof req.body === 'object' ? req.body : {};
+    let baseUrl = incomingBody.baseUrl || 'http://47.113.148.159:8090';
+    // 娴?baseUrl 娑擃厼骞撻梽銈呭讲閼宠棄鐡ㄩ崷銊ф畱 /K3Cloud 鍚庣紑锛岄伩鍏嶉噸澶?
     if (baseUrl.endsWith('/K3Cloud')) {
       baseUrl = baseUrl.replace(/\/K3Cloud$/, '');
     }
-    // req.path 包含 /K3Cloud/...，需要去掉前面的 /K3Cloud 避免重复
+    // req.path 閸栧懎鎯?/K3Cloud/...閿涘矂娓剁憰浣稿箵閹哄澧犻棃銏㈡畱 /K3Cloud 闁灝鍘ら柌宥咁槻
     const pathWithoutPrefix = req.path.replace(/^\/K3Cloud/, '');
     const targetUrl = `${baseUrl}/K3Cloud${pathWithoutPrefix}`;
 
-    // 准备请求头
+    // 閸戝棗顦拠閿嬬湴婢?
     const headers = {
       'Content-Type': 'application/json',
     };
 
-    // 如果有存储的 Cookie 或者请求中传来的 Cookie，添加到请求头
-    const sessionKey = req.body.sessionKey || req.headers['x-session-key'];
+    // 婵″倹鐏夐張澶婄摠閸屻劎娈?Cookie 閹存牞鈧懓顕Ч備腑浼犳潵鐨?Cookie锛屾坊鍔犲埌璇锋眰澶?
+    const sessionKey = incomingBody.sessionKey || req.headers['x-session-key'];
     if (sessionKey && kingdeeSessions.has(sessionKey)) {
       headers['Cookie'] = kingdeeSessions.get(sessionKey);
-      console.log('使用存储的 Cookie:', sessionKey, kingdeeSessions.get(sessionKey).substring(0, 50));
+      console.log('娴ｈ法鏁ょ€涙ê偍鐨?Cookie:', sessionKey, kingdeeSessions.get(sessionKey).substring(0, 50));
     }
-    // 如果请求体中有 Cookie（从 taskExecutor 传来），直接使用
+    // 婵″倹鐏夌拠閿嬬湴娴ｆ挷鑵戦張?Cookie閿涘牅绮?taskExecutor 娴肩姵娼甸敍澶涚礉閻╁瓨甯存担璺ㄦ暏
     if (req.headers['cookie']) {
-      headers['Cookie'] = req.headers['cookie'];
-      console.log('使用请求传来的 Cookie:', req.headers['cookie'].substring(0, 50));
+      headers['Cookie'] = headers['Cookie']
+        ? `${headers['Cookie']}; ${req.headers['cookie']}`
+        : req.headers['cookie'];
+      console.log('娴ｈ法鏁ょ拠閿嬬湴娴肩姵娼甸惃?Cookie:', req.headers['cookie'].substring(0, 50));
     }
 
-    // 转发 Host 头
+    // 鏉烆剙褰?Host 婢?
     const urlObj = new URL(targetUrl);
     headers['Host'] = urlObj.host;
 
-    console.log('金蝶代理请求:', {
+    const forwardBody = req.method !== 'GET' && req.method !== 'HEAD'
+      ? { ...incomingBody }
+      : undefined;
+    if (forwardBody) {
+      // sessionKey/baseUrl are proxy control fields and not part of Kingdee API payload.
+      delete forwardBody.sessionKey;
+      delete forwardBody.baseUrl;
+    }
+
+    console.log('閲戣澏浠ｇ悊璇锋眰:', {
       targetUrl,
       method: req.method,
       hasSessionKey: !!sessionKey,
-      bodyPreview: JSON.stringify(req.body).substring(0, 200)
+      bodyPreview: JSON.stringify(forwardBody ?? {}).substring(0, 200)
     });
 
     const response = await fetch(targetUrl, {
       method: req.method,
       headers,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
+      body: forwardBody ? JSON.stringify(forwardBody) : undefined,
     });
 
-    // 提取响应中的 Cookie
-    const setCookieHeaders = response.headers.get('set-cookie');
-    if (setCookieHeaders) {
-      // 保存 Cookie 到 session
-      if (sessionKey) {
-        kingdeeSessions.set(sessionKey, setCookieHeaders);
-        console.log('保存 Cookie 到 session:', sessionKey);
+    // 閹绘劕褰囬崫宥呯安娑擃厾娈?Cookie
+    const setCookieHeaders = getSetCookieArray(response.headers);
+    if (setCookieHeaders.length > 0) {
+      const cookiePairs = extractCookiePairsFromSetCookie(setCookieHeaders);
+      // 娣囨繂鐡?Cookie 閸?session
+      if (sessionKey && cookiePairs) {
+        kingdeeSessions.set(sessionKey, cookiePairs);
+        console.log('娣囨繂鐡?Cookie 閸?session:', sessionKey, cookiePairs.substring(0, 80));
       }
-      // 转发 Set-Cookie header
+      // 鏉烆剙褰?Set-Cookie header
       res.setHeader('Set-Cookie', setCookieHeaders);
     }
 
-    // 先获取文本，再尝试解析 JSON
-    const responseText = await response.text();
-    console.log('金蝶响应原始内容:', responseText.substring(0, 500));
+    // 兼容金蝶返回的非 UTF-8 内容，优先按 Content-Type 声明的 charset 解码
+    const responseBuffer = Buffer.from(await response.arrayBuffer());
+    const contentType = response.headers.get('content-type') || '';
+    const charsetMatch = /charset\s*=\s*([^;\s]+)/i.exec(contentType);
+    const preferredEncoding = charsetMatch?.[1] || 'utf-8';
+
+    let responseText =
+      decodeBufferByEncoding(responseBuffer, preferredEncoding)
+      || decodeBufferByEncoding(responseBuffer, 'utf-8')
+      || decodeBufferByEncoding(responseBuffer, 'gbk')
+      || '';
+
+    console.log('闁叉垼婢忛崫宥呯安閸樼喎顫愰崘鍛啇:', responseText.substring(0, 500));
 
     let data;
     try {
       data = JSON.parse(responseText);
     } catch (parseError) {
-      console.error('JSON 解析失败，响应内容:', responseText);
-      return res.status(response.status).json({
-        error: '金蝶服务器返回非 JSON 响应',
-        rawResponse: responseText.substring(0, 500),
-        status: response.status
-      });
+      // 某些金蝶实例未声明 charset，会导致 UTF-8 误解码，这里再尝试一次 GBK
+      const gbkText = decodeBufferByEncoding(responseBuffer, 'gbk');
+      if (gbkText && gbkText !== responseText) {
+        try {
+          data = JSON.parse(gbkText);
+          responseText = gbkText;
+        } catch {
+          // 保留原错误处理
+        }
+      }
+
+      if (!data) {
+        console.error('JSON 鐟欙絾鐎芥径杈Е閿涘苯鎼锋惔鏂垮敶鐎?', responseText);
+        return res.status(response.status).json({
+          error: '金蝶服务器返回非 JSON 响应',
+          rawResponse: responseText.substring(0, 500),
+          status: response.status
+        });
+      }
     }
 
-    console.log('金蝶代理响应:', {
+    console.log('閲戣澏浠ｇ悊鍝嶅簲:', {
       status: response.status,
       LoginResultType: data?.LoginResultType,
       hasException: !!data?.Exception
@@ -860,12 +945,12 @@ app.all('/K3Cloud/*', async (req, res) => {
 
     res.status(response.status).json(data);
   } catch (error) {
-    console.error('金蝶代理请求失败:', error);
-    res.status(500).json({ error: '代理请求失败：' + error.message });
+    console.error('閲戣澏代理请求失败:', error);
+    res.status(500).json({ error: '代理请求失败: ' + error.message });
   }
 });
 
-// 获取本机 IP 地址
+// 鑾峰彇鏈満 IP 閸︽澘娼?
 import os from 'os';
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
@@ -879,38 +964,38 @@ function getLocalIP() {
   return 'localhost';
 }
 
-// 启动服务器
+// 閸氼垰濮╅張宥呭閸?
 ensureDataDir()
   .then(() => {
     const localIP = getLocalIP();
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log('========================================');
-      console.log(`服务器运行在 http://localhost:${PORT}`);
-      console.log(`局域网访问 http://${localIP}:${PORT}`);
-      console.log(`数据存储目录：${DATA_DIR}`);
-      console.log('性能优化已启用：Gzip 压缩、响应缓存、连接池');
+      console.log(`鏈嶅姟鍣ㄨ繍琛屽湪 http://localhost:${PORT}`);
+      console.log(`鐏炩偓閸╃喓缍夌拋鍧楁６ http://${localIP}:${PORT}`);
+      console.log(`鏁版嵁瀛樺偍鐩綍: ${DATA_DIR}`);
+      console.log('閹嗗厴娴兼ê瀵插鎻掓儙閻㈩煉绱癎zip 閸樺缂夐妴浣告惙鎼存梻绱︾€涙ǜ鈧浇绻涢幒銉︾潨');
       console.log('========================================');
     });
 
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.error(`错误: 端口 ${PORT} 已被占用`);
-        console.error(`请运行以下命令查找并关闭占用进程:`);
+        console.error(`闁挎瑨顕? 缁旑垰褰?${PORT} 瀹歌尪顫﹂崡鐘垫暏`);
+        console.error(`璇疯繍琛屼互涓嬪懡浠ゆ煡鎵惧苟鍏抽棴鍗犵敤杩涚▼:`);
         console.error(`  netstat -ano | findstr :${PORT}`);
-        console.error(`  taskkill /F /PID <进程ID>`);
+        console.error(`  taskkill /F /PID <杩涚▼ID>`);
       } else {
-        console.error('服务器启动失败:', err.message);
+        console.error('閺堝秴濮熼崳銊ユ儙閸斻劌銇戠拹?', err.message);
       }
       process.exit(1);
     });
   })
   .catch((err) => {
-    console.error('初始化数据目录失败:', err.message);
+    console.error('閸掓繂顫愰崠鏍ㄦ殶閹诡喚娲拌ぐ鏇炪亼鐠?', err.message);
     process.exit(1);
   });
-// ==================== 企业级账户管理 API ====================
+// ==================== 娴间椒绗熺痪褑澶勯幋椋庮吀閻?API ====================
 
-// 管理员权限验证中间件
+// 绠＄悊鍛樻潈闄愰獙璇佷腑闂翠欢
 function adminMiddleware(req, res, next) {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) {
@@ -926,7 +1011,7 @@ function adminMiddleware(req, res, next) {
   }
 }
 
-// 获取所有账户列表
+// 閼惧嘲褰囬幍鈧張澶庡閹村嘲鍨悰?
 app.get('/api/admin/accounts', adminMiddleware, async (req, res) => {
   try {
     const files = await fs.readdir(DATA_DIR);
@@ -952,7 +1037,7 @@ app.get('/api/admin/accounts', adminMiddleware, async (req, res) => {
             });
           }
         } catch {
-          // 忽略读取失败的文件
+          // 韫囩晫鏆愮拠璇插絿婢惰精瑙﹂惃鍕瀮娴?
         }
       }
     }
@@ -964,7 +1049,7 @@ app.get('/api/admin/accounts', adminMiddleware, async (req, res) => {
   }
 });
 
-// 创建账户
+// 鍒涘缓璐︽埛
 app.post('/api/admin/accounts', adminMiddleware, async (req, res) => {
   try {
     const { username, password, email, phone, department, role } = req.body;
@@ -979,7 +1064,7 @@ app.post('/api/admin/accounts', adminMiddleware, async (req, res) => {
       await fs.access(accountPath);
       return res.status(409).json({ error: '用户名已存在' });
     } catch {
-      // 文件不存在，可以创建
+      // 閺傚洣娆㈡稉宥呯摠閸︻煉绱濋崣顖欎簰閸掓稑缂?
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -1013,7 +1098,7 @@ app.post('/api/admin/accounts', adminMiddleware, async (req, res) => {
   }
 });
 
-// 更新账户信息
+// 鏇存柊璐︽埛淇℃伅
 app.put('/api/admin/accounts/:accountId', adminMiddleware, async (req, res) => {
   try {
     const { accountId } = req.params;
@@ -1043,7 +1128,7 @@ app.put('/api/admin/accounts/:accountId', adminMiddleware, async (req, res) => {
   }
 });
 
-// 删除账户（管理员）
+// 閸掔娀娅庣拹锔藉煕閿涘牏顓搁悶鍡楁喅閿?
 app.delete('/api/admin/accounts/:accountId', adminMiddleware, async (req, res) => {
   try {
     const { accountId } = req.params;
@@ -1105,7 +1190,7 @@ app.post('/api/admin/accounts/:accountId/reset-password', adminMiddleware, async
   }
 });
 
-// 锁定/解锁账户
+// 锁定/瑙ｉ攣璐︽埛
 app.post('/api/admin/accounts/:accountId/toggle-lock', adminMiddleware, async (req, res) => {
   try {
     const { accountId } = req.params;
@@ -1131,7 +1216,7 @@ app.post('/api/admin/accounts/:accountId/toggle-lock', adminMiddleware, async (r
   }
 });
 
-// 获取操作日志
+// 鑾峰彇鎿嶄綔鏃ュ織
 app.get('/api/admin/operation-logs', adminMiddleware, async (req, res) => {
   res.json({ logs: [] });
 });
@@ -1141,7 +1226,7 @@ app.get('/api/admin/login-history', adminMiddleware, async (req, res) => {
   res.json({ history: [] });
 });
 
-// 获取当前账户信息
+// 鑾峰彇褰撳墠璐︽埛淇℃伅
 app.get('/api/account/profile', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -1166,7 +1251,7 @@ app.get('/api/account/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// 更新个人信息
+// 閺囧瓨鏌婃稉顏冩眽娣団剝浼?
 app.put('/api/account/profile', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -1189,7 +1274,7 @@ app.put('/api/account/profile', authMiddleware, async (req, res) => {
   }
 });
 
-// 修改密码
+// 娣囶喗鏁肩€靛棛鐖?
 app.post('/api/account/change-password', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -1217,9 +1302,9 @@ app.post('/api/account/change-password', authMiddleware, async (req, res) => {
   }
 });
 
-// ==================== 日志 API ====================
+// ==================== 鏃ュ織 API ====================
 
-// 保存 WebAPI 日志
+// 保存 WebAPI 鏃ュ織
 app.post('/api/logs/webapi', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -1246,11 +1331,11 @@ app.post('/api/logs/webapi', authMiddleware, async (req, res) => {
     });
   } catch (error) {
     console.error('保存日志失败:', error);
-    res.status(500).json({ error: '保存日志失败：' + error.message });
+    res.status(500).json({ error: '保存日志失败: ' + error.message });
   }
 });
 
-// 获取指定实例的日志
+// 閼惧嘲褰囬幐鍥х暰鐎圭偘绶ラ惃鍕）韫?
 app.get('/api/logs/:instanceId', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -1269,7 +1354,7 @@ app.get('/api/logs/:instanceId', authMiddleware, async (req, res) => {
   }
 });
 
-// 删除指定实例的日志
+// 閸掔娀娅庨幐鍥х暰鐎圭偘绶ラ惃鍕）韫?
 app.delete('/api/logs/:instanceId', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -1288,7 +1373,7 @@ app.delete('/api/logs/:instanceId', authMiddleware, async (req, res) => {
   }
 });
 
-// ==================== 任务执行 API ====================
+// ==================== 娴犺濮熼幍褑顢?API ====================
 
 // 保存实例回调函数
 async function saveInstanceCallback(instance) {
@@ -1301,24 +1386,81 @@ async function saveInstanceCallback(instance) {
     await fs.mkdir(instancesDir, { recursive: true });
   }
 
-  // 使用实例 ID 作为文件名
+  // 娴ｈ法鏁ょ€圭偘绶?ID 娴ｆ粈璐熼弬鍥︽閸?
   const filename = `${instance.id}.json`;
   const filepath = path.join(instancesDir, filename);
 
   await fs.writeFile(filepath, JSON.stringify(instance, null, 2));
-  console.log(`[实例更新] ${instance.id} 状态=${instance.status}`);
+  console.log(`[鐎圭偘绶ラ弴瀛樻煀] ${instance.id} 閻樿埖鈧?${instance.status}`);
 }
 
-// 保存日志回调函数
+// 淇濆瓨鏃ュ織鍥炶皟鍑芥暟
 async function saveLogCallback(username, instanceId, logData) {
   await saveWebApiLog(username, instanceId, logData);
 }
 
-// 启动任务执行
+// 棰勮绗竴鏉″尮閰嶈褰曞皢鍙戦€佸埌閲戣澏鐨勮姹傛暟鎹紙涓嶅彂閫侊級
+const previewRequestHandler = async (req, res) => {
+  try {
+    const { username } = req.user;
+    const { taskId } = req.params;
+
+    const accountData = await readAccountData(username);
+    const task = accountData.tasks.find(t => t.id === taskId);
+
+    if (!task) {
+      return res.status(404).json({ error: '任务不存在' });
+    }
+
+    const previewInstance = {
+      id: `preview-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      taskId: task.id,
+      taskName: task.name,
+      username,
+      status: TaskStatus.IDLE,
+      startTime: null,
+      endTime: null,
+      progress: 0,
+      totalCount: 0,
+      successCount: 0,
+      errorCount: 0,
+      isStopping: false,
+      stopRequestedAt: null,
+    };
+
+    const executor = new TaskExecutor(
+      task,
+      previewInstance,
+      username,
+      null,
+      null,
+      { firstRecordOnly: true }
+    );
+
+    const preview = await executor.previewFirstRecordRequest();
+
+    res.json({
+      success: true,
+      preview,
+      message: '已生成第一条匹配记录的请求数据预览（未发送到金蝶）',
+    });
+  } catch (error) {
+    console.error('预览请求数据失败:', error);
+    res.status(500).json({ error: '预览请求数据失败: ' + error.message });
+  }
+};
+
+// 新旧版本接口兼容：不同前端版本可能调用不同路径
+app.post('/api/tasks/:taskId/preview-request', authMiddleware, previewRequestHandler);
+app.post('/api/tasks/:taskId/request-preview', authMiddleware, previewRequestHandler);
+app.post('/api/tasks/:taskId/preview', authMiddleware, previewRequestHandler);
+
+// 閸氼垰濮╂禒璇插鎵ц
 app.post('/api/tasks/:taskId/execute', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
     const { taskId } = req.params;
+    const { firstRecordOnly = false } = req.body || {};
 
     // 获取任务配置
     const accountData = await readAccountData(username);
@@ -1342,25 +1484,27 @@ app.post('/api/tasks/:taskId/execute', authMiddleware, async (req, res) => {
       totalCount: 0,
       successCount: 0,
       errorCount: 0,
+      isStopping: false,
     };
 
-    // 保存初始实例
+    // 娣囨繂鐡ㄩ崚婵嗩潗鐎圭偘绶?
     await saveInstanceFile(username, instance);
 
-    // 创建执行器并启动
+    // 閸掓稑缂撻幍褑顢戦崳銊ヨ嫙閸氼垰濮?
     const executor = new TaskExecutor(
       task,
       instance,
       username,
       (instanceId, logData) => saveLogCallback(username, instanceId, logData),
-      saveInstanceCallback
+      saveInstanceCallback,
+      { firstRecordOnly: firstRecordOnly === true }
     );
 
     addRunningTask(instanceId, executor);
 
-    // 异步执行任务（不阻塞响应）
+    // 瀵倹顒為幍褑顢戞禒璇插锛堜笉闃诲鍝嶅簲锛?
     executor.execute().catch(err => {
-      console.error(`任务执行失败: ${err.message}`);
+      console.error(`娴犺濮熼幍褑顢戞径杈Е: ${err.message}`);
     }).finally(() => {
       removeRunningTask(instanceId);
     });
@@ -1368,15 +1512,15 @@ app.post('/api/tasks/:taskId/execute', authMiddleware, async (req, res) => {
     res.json({
       success: true,
       instanceId,
-      message: '任务已启动',
+      message: firstRecordOnly ? '测试任务已启动（仅执行第一条记录）' : '任务已启动',
     });
   } catch (error) {
     console.error('启动任务失败:', error);
-    res.status(500).json({ error: '启动任务失败：' + error.message });
+    res.status(500).json({ error: '启动任务失败: ' + error.message });
   }
 });
 
-// 停止任务执行
+// 閸嬫粍顒涙禒璇插鎵ц
 app.post('/api/tasks/:instanceId/stop', authMiddleware, async (req, res) => {
   try {
     const { instanceId } = req.params;
@@ -1387,23 +1531,34 @@ app.post('/api/tasks/:instanceId/stop', authMiddleware, async (req, res) => {
     }
 
     executor.stop();
-    res.json({ success: true, message: '任务已请求停止' });
+    const runtime = typeof executor.getRuntimeStatus === 'function'
+      ? executor.getRuntimeStatus()
+      : { isRunning: true, isStopping: true, isStopped: false };
+    res.json({
+      success: true,
+      message: '任务已请求安全停止，正在等待当前记录完成',
+      status: executor.instance?.status || TaskStatus.PAUSED,
+      ...runtime,
+    });
   } catch (error) {
     console.error('停止任务失败:', error);
     res.status(500).json({ error: '停止任务失败' });
   }
 });
 
-// 获取任务状态
+// 閼惧嘲褰囨禒璇插閻樿埖鈧?
 app.get('/api/tasks/:instanceId/status', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
     const { instanceId } = req.params;
 
-    // 先检查正在运行的任务
+    // 閸忓牊顥呴弻銉︻劀閸︺劏绻嶇悰宀€娈戞禒璇插
     const executor = getRunningTask(instanceId);
     if (executor) {
       const instance = executor.instance;
+      const runtime = typeof executor.getRuntimeStatus === 'function'
+        ? executor.getRuntimeStatus()
+        : { isRunning: true, isStopping: false, isStopped: false };
       return res.json({
         success: true,
         status: instance.status,
@@ -1411,11 +1566,16 @@ app.get('/api/tasks/:instanceId/status', authMiddleware, async (req, res) => {
         totalCount: instance.totalCount,
         successCount: instance.successCount,
         errorCount: instance.errorCount,
-        isRunning: true,
+        isRunning: runtime.isRunning,
+        isStopping: runtime.isStopping,
+        isStopped: runtime.isStopped,
+        startTime: instance.startTime,
+        endTime: instance.endTime,
+        stopRequestedAt: instance.stopRequestedAt,
       });
     }
 
-    // 检查已完成的任务实例
+    // 濡偓閺屻儱鍑＄€瑰本鍨氶惃鍕崲閸斺€崇杽娓?
     const instancesDir = getAccountInstancesDir(username);
     try {
       await fs.access(instancesDir);
@@ -1437,8 +1597,11 @@ app.get('/api/tasks/:instanceId/status', authMiddleware, async (req, res) => {
               successCount: instance.successCount || 0,
               errorCount: instance.errorCount || 0,
               isRunning: false,
+              isStopping: false,
+              isStopped: true,
               startTime: instance.startTime,
               endTime: instance.endTime,
+              stopRequestedAt: instance.stopRequestedAt,
             });
           }
         } catch {
@@ -1449,7 +1612,9 @@ app.get('/api/tasks/:instanceId/status', authMiddleware, async (req, res) => {
 
     res.status(404).json({ error: '任务实例不存在' });
   } catch (error) {
-    console.error('获取任务状态失败:', error);
+    console.error('閼惧嘲褰囨禒璇插閻樿埖鈧礁銇戠拹?', error);
     res.status(500).json({ error: '获取任务状态失败' });
   }
 });
+
+

@@ -82,9 +82,9 @@ export function getDefaultProcessType(fieldType?: number): import('../types').Fi
  */
 export function getFieldTypeName(fieldType?: number): string {
   if (fieldType === undefined || fieldType === null) {
-    return '未知';
+    return 'δ֪';
   }
-  return FieldTypeNames[fieldType] || `未知 (${fieldType})`;
+  return FieldTypeNames[fieldType] || `δ֪ (${fieldType})`;
 }
 
 /**

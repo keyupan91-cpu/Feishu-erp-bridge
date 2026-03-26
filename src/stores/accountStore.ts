@@ -53,6 +53,7 @@ interface AccountStore {
   deleteTask: (id: string) => Promise<void>;
   copyTask: (id: string, newName: string) => Promise<void>;
   toggleTask: (id: string) => Promise<void>;
+  reorderTasks: (sourceTaskId: string, targetTaskId: string) => Promise<void>;
   updateVerificationStatus: (taskId: string, status: Partial<TaskVerificationStatus>) => Promise<void>;
 
   // 任务实例
@@ -78,6 +79,45 @@ interface AccountStore {
   // 删除账户
   deleteAccount: () => Promise<void>;
 }
+
+const cloneFeishuConfig = (config: TaskConfig['feishuConfig']): TaskConfig['feishuConfig'] => ({
+  ...config,
+  fieldParams: (config.fieldParams || []).map((param) => ({ ...param })),
+  filterConditions: (config.filterConditions || []).map((condition) => ({ ...condition })),
+  writeBackFields: (config.writeBackFields || []).map((field) => ({ ...field })),
+});
+
+const cloneKingdeeConfig = (config: TaskConfig['kingdeeConfig']): TaskConfig['kingdeeConfig'] => ({
+  ...config,
+  loginParams: { ...config.loginParams },
+});
+
+const cloneTaskForStorage = <
+  T extends {
+    feishuConfig: TaskConfig['feishuConfig'];
+    kingdeeConfig: TaskConfig['kingdeeConfig'];
+    verificationStatus?: TaskVerificationStatus;
+  }
+>(task: T): T => ({
+  ...task,
+  feishuConfig: cloneFeishuConfig(task.feishuConfig),
+  kingdeeConfig: cloneKingdeeConfig(task.kingdeeConfig),
+  verificationStatus: task.verificationStatus ? { ...task.verificationStatus } : undefined,
+});
+
+const cloneTaskPatch = (patch: Partial<TaskConfig>): Partial<TaskConfig> => {
+  const isolatedPatch: Partial<TaskConfig> = { ...patch };
+  if (patch.feishuConfig) {
+    isolatedPatch.feishuConfig = cloneFeishuConfig(patch.feishuConfig);
+  }
+  if (patch.kingdeeConfig) {
+    isolatedPatch.kingdeeConfig = cloneKingdeeConfig(patch.kingdeeConfig);
+  }
+  if (patch.verificationStatus) {
+    isolatedPatch.verificationStatus = { ...patch.verificationStatus };
+  }
+  return isolatedPatch;
+};
 
 export const useAccountStore = create<AccountStore>((set, get) => ({
   currentAccount: null,
@@ -199,8 +239,9 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
 
   // 添加任务
   addTask: async (task) => {
+    const isolatedTask = cloneTaskForStorage(task);
     const newTask: TaskConfig = {
-      ...task,
+      ...isolatedTask,
       id: Date.now().toString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -211,10 +252,11 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
 
   // 更新任务
   updateTask: async (id, task) => {
+    const isolatedPatch = cloneTaskPatch(task);
     set((state) => ({
       tasks: state.tasks.map((t) =>
         t.id === id
-          ? { ...t, ...task, updatedAt: new Date().toISOString() }
+          ? { ...t, ...isolatedPatch, updatedAt: new Date().toISOString() }
           : t
       ),
     }));
@@ -242,9 +284,13 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
   copyTask: async (id, newName) => {
     const task = get().tasks.find((t) => t.id === id);
     if (task) {
+      const clonedTask = cloneTaskForStorage(task);
       await get().addTask({
-        ...task,
         name: newName,
+        description: clonedTask.description,
+        feishuConfig: clonedTask.feishuConfig,
+        kingdeeConfig: clonedTask.kingdeeConfig,
+        verificationStatus: clonedTask.verificationStatus,
         enabled: false,
       });
     }
@@ -257,6 +303,28 @@ export const useAccountStore = create<AccountStore>((set, get) => ({
         t.id === id ? { ...t, enabled: !t.enabled } : t
       ),
     }));
+    await get().saveToServer();
+  },
+
+  // 重新排序任务
+  reorderTasks: async (sourceTaskId, targetTaskId) => {
+    if (!sourceTaskId || !targetTaskId || sourceTaskId === targetTaskId) {
+      return;
+    }
+
+    const tasks = get().tasks;
+    const sourceIndex = tasks.findIndex((task) => task.id === sourceTaskId);
+    const targetIndex = tasks.findIndex((task) => task.id === targetTaskId);
+
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+      return;
+    }
+
+    const nextTasks = [...tasks];
+    const [movedTask] = nextTasks.splice(sourceIndex, 1);
+    nextTasks.splice(targetIndex, 0, movedTask);
+
+    set({ tasks: nextTasks });
     await get().saveToServer();
   },
 

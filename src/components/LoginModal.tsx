@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Modal, Form, Input, Button, Tabs, message, Card, Space, Typography } from 'antd';
-import { UserOutlined, LockOutlined, LoginOutlined, UserAddOutlined } from '@ant-design/icons';
+import { Button, Card, Form, Input, message, Modal, Tabs, Typography } from 'antd';
+import { LockOutlined, LoginOutlined, UserAddOutlined, UserOutlined } from '@ant-design/icons';
 import { localFileStorage } from '../services/localFileStorage';
 import type { Account } from '../services/localFileStorage';
 
@@ -18,27 +18,29 @@ function LoginModal({ visible, onLogin, onCancel }: LoginModalProps) {
   const [loginForm] = Form.useForm();
   const [registerForm] = Form.useForm();
 
-  // 处理登录
   const handleLogin = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
       const account = await localFileStorage.validateLogin(values.username, values.password);
-      if (account) {
-        message.success('登录成功');
-        onLogin(account);
-        loginForm.resetFields();
-      } else {
+      if (!account) {
         message.error('用户名或密码错误');
+        return;
       }
+      message.success('登录成功');
+      onLogin(account);
+      loginForm.resetFields();
     } catch (error: any) {
-      message.error(`登录失败: ${error.message}`);
+      message.error(error?.message || '登录失败');
     } finally {
       setLoading(false);
     }
   };
 
-  // 处理注册
-  const handleRegister = async (values: { username: string; password: string; confirmPassword: string }) => {
+  const handleRegister = async (values: {
+    username: string;
+    password: string;
+    confirmPassword: string;
+  }) => {
     if (values.password !== values.confirmPassword) {
       message.error('两次输入的密码不一致');
       return;
@@ -48,10 +50,10 @@ function LoginModal({ visible, onLogin, onCancel }: LoginModalProps) {
     try {
       await localFileStorage.registerAccount(values.username, values.password);
       message.success('注册成功，请登录');
-      setActiveTab('login');
       registerForm.resetFields();
+      setActiveTab('login');
     } catch (error: any) {
-      message.error(`注册失败: ${error.message}`);
+      message.error(error?.message || '注册失败');
     } finally {
       setLoading(false);
     }
@@ -66,10 +68,11 @@ function LoginModal({ visible, onLogin, onCancel }: LoginModalProps) {
       width={420}
       closable={false}
       maskClosable={false}
+      destroyOnClose
     >
-      <Card style={{ border: 'none' }}>
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <Title level={3} style={{ margin: 0, color: '#4A90E2' }}>
+      <Card style={{ border: 'none', boxShadow: 'none' }}>
+        <div style={{ textAlign: 'center', marginBottom: 16 }}>
+          <Title level={3} style={{ marginBottom: 6 }}>
             金蝶数据传输平台
           </Title>
           <Text type="secondary">请登录或注册账户</Text>
@@ -78,131 +81,75 @@ function LoginModal({ visible, onLogin, onCancel }: LoginModalProps) {
         <Tabs activeKey={activeTab} onChange={setActiveTab} centered>
           <Tabs.TabPane
             tab={
-              <Space>
-                <LoginOutlined />
-                登录
-              </Space>
+              <span>
+                <LoginOutlined /> 登录
+              </span>
             }
             key="login"
           >
-            <Form
-              form={loginForm}
-              onFinish={handleLogin}
-              layout="vertical"
-              size="large"
-            >
+            <Form form={loginForm} layout="vertical" onFinish={handleLogin}>
               <Form.Item
                 name="username"
+                label="用户名"
                 rules={[{ required: true, message: '请输入用户名' }]}
               >
-                <Input
-                  prefix={<UserOutlined />}
-                  placeholder="用户名"
-                  autoComplete="username"
-                />
+                <Input prefix={<UserOutlined />} placeholder="请输入用户名" />
               </Form.Item>
-
               <Form.Item
                 name="password"
+                label="密码"
                 rules={[{ required: true, message: '请输入密码' }]}
               >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="密码"
-                  autoComplete="current-password"
-                />
+                <Input.Password prefix={<LockOutlined />} placeholder="请输入密码" />
               </Form.Item>
-
-              <Form.Item style={{ marginBottom: 0 }}>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  block
-                  size="large"
-                  style={{ background: '#4A90E2' }}
-                >
-                  登录
-                </Button>
-              </Form.Item>
+              <Button type="primary" htmlType="submit" block loading={loading}>
+                登录
+              </Button>
             </Form>
           </Tabs.TabPane>
 
           <Tabs.TabPane
             tab={
-              <Space>
-                <UserAddOutlined />
-                注册
-              </Space>
+              <span>
+                <UserAddOutlined /> 注册
+              </span>
             }
             key="register"
           >
-            <Form
-              form={registerForm}
-              onFinish={handleRegister}
-              layout="vertical"
-              size="large"
-            >
+            <Form form={registerForm} layout="vertical" onFinish={handleRegister}>
               <Form.Item
                 name="username"
+                label="用户名"
                 rules={[
                   { required: true, message: '请输入用户名' },
-                  { min: 3, message: '用户名至少3个字符' },
+                  { min: 3, message: '用户名至少 3 位' },
                 ]}
               >
-                <Input
-                  prefix={<UserOutlined />}
-                  placeholder="用户名"
-                  autoComplete="username"
-                />
+                <Input prefix={<UserOutlined />} placeholder="请输入用户名" />
               </Form.Item>
-
               <Form.Item
                 name="password"
+                label="密码"
                 rules={[
                   { required: true, message: '请输入密码' },
-                  { min: 6, message: '密码至少6个字符' },
+                  { min: 6, message: '密码至少 6 位' },
                 ]}
               >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="密码"
-                  autoComplete="new-password"
-                />
+                <Input.Password prefix={<LockOutlined />} placeholder="请输入密码" />
               </Form.Item>
-
               <Form.Item
                 name="confirmPassword"
-                rules={[{ required: true, message: '请确认密码' }]}
+                label="确认密码"
+                rules={[{ required: true, message: '请再次输入密码' }]}
               >
-                <Input.Password
-                  prefix={<LockOutlined />}
-                  placeholder="确认密码"
-                  autoComplete="new-password"
-                />
+                <Input.Password prefix={<LockOutlined />} placeholder="请再次输入密码" />
               </Form.Item>
-
-              <Form.Item style={{ marginBottom: 0 }}>
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={loading}
-                  block
-                  size="large"
-                  style={{ background: '#F5A623' }}
-                >
-                  注册
-                </Button>
-              </Form.Item>
+              <Button type="primary" htmlType="submit" block loading={loading}>
+                注册
+              </Button>
             </Form>
           </Tabs.TabPane>
         </Tabs>
-
-        <div style={{ marginTop: 16, textAlign: 'center' }}>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            数据存储在本地浏览器，请定期导出备份
-          </Text>
-        </div>
       </Card>
     </Modal>
   );

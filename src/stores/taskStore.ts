@@ -103,6 +103,8 @@ export const useTaskStore = create<TaskStore>()(
           id: Date.now().toString(),
           taskId,
           status: TaskStatus.IDLE,
+          logs: [],
+          webApiLogs: [],
           progress: 0,
         };
         set((state) => ({

@@ -1,4 +1,4 @@
-import { Button, Card, Tag } from 'antd';
+﻿import { Button, Card, Tag } from 'antd';
 import {
   CloudSyncOutlined,
   SettingOutlined,
@@ -14,9 +14,9 @@ import type { TaskConfig, TaskInstance } from '../types';
 import { TaskStatus } from '../types';
 
 /**
- * 移动端任务卡片组件
+ * 绉诲姩绔换鍔″崱鐗囩粍浠?
  * - 触摸友好的大按钮
- * - 简洁的信息展示
+ * - 绠€娲佺殑淇℃伅灞曠ず
  * - 支持横向滑动
  */
 export interface MobileTaskCardProps {
@@ -100,7 +100,7 @@ export function MobileTaskCard({
           disabled={!task.enabled}
           className="execute-btn"
           block
-          style={{ flex: 2, pointerEvents: 'auto' }}
+          style={{ pointerEvents: 'auto' }}
         >
           {task.enabled ? '执行' : '已禁用'}
         </Button>
@@ -113,7 +113,7 @@ export function MobileTaskCard({
           }}
           className="config-btn"
           block
-          style={{ flex: 1, pointerEvents: 'auto' }}
+          style={{ pointerEvents: 'auto' }}
         >
           配置
         </Button>
@@ -127,7 +127,7 @@ export function MobileTaskCard({
           }}
           className="test-btn"
           block
-          style={{ flex: 1, pointerEvents: 'auto' }}
+          style={{ pointerEvents: 'auto' }}
         >
           测试
         </Button>
@@ -140,7 +140,7 @@ export function MobileTaskCard({
           }}
           className="toggle-btn"
           block
-          style={{ flex: 1, pointerEvents: 'auto' }}
+          style={{ pointerEvents: 'auto' }}
         >
           {task.enabled ? '禁用' : '启用'}
         </Button>
@@ -148,17 +148,19 @@ export function MobileTaskCard({
 
       <style>{`
         .mobile-task-card {
-          margin-bottom: 12px;
-          border-radius: 12px;
+          margin-bottom: 14px;
+          border-radius: 14px;
           overflow: hidden;
-          background: #ffffff;
+          border: 1px solid #d9e1e7;
+          background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+          box-shadow: 0 8px 20px rgba(90, 110, 126, 0.08);
         }
 
         .mobile-task-card-header {
           display: flex;
           justify-content: space-between;
           align-items: flex-start;
-          margin-bottom: 12px;
+          margin-bottom: 10px;
         }
 
         .mobile-task-card-info {
@@ -169,8 +171,8 @@ export function MobileTaskCard({
         .mobile-task-card-title {
           margin: 0 0 8px 0;
           font-size: 16px;
-          font-weight: 600;
-          color: #2C3E50;
+          font-weight: 700;
+          color: #2f4454;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
@@ -178,12 +180,16 @@ export function MobileTaskCard({
 
         .mobile-task-card-tags {
           display: flex;
-          gap: 6px;
+          gap: 8px;
           flex-wrap: wrap;
         }
 
         .mobile-task-card-body {
-          margin-bottom: 12px;
+          margin-bottom: 10px;
+          padding: 8px 10px;
+          background: #f4f8fb;
+          border: 1px solid #e2e9ee;
+          border-radius: 10px;
         }
 
         .mobile-task-card-row {
@@ -195,7 +201,7 @@ export function MobileTaskCard({
         }
 
         .mobile-task-card-row .label {
-          color: #5D6D7E;
+          color: #677a89;
           font-weight: 500;
           margin-right: 8px;
           white-space: nowrap;
@@ -203,7 +209,7 @@ export function MobileTaskCard({
         }
 
         .mobile-task-card-row .value {
-          color: #2C3E50;
+          color: #33495b;
           word-break: break-word;
           flex: 1;
         }
@@ -213,10 +219,10 @@ export function MobileTaskCard({
           align-items: flex-start;
           font-size: 13px;
           line-height: 1.5;
-          color: #5D6D7E;
-          background: #F8FAFC;
+          color: #5d7080;
+          background: #edf3f7;
           padding: 8px 12px;
-          border-radius: 6px;
+          border-radius: 8px;
           margin-top: 8px;
         }
 
@@ -232,49 +238,27 @@ export function MobileTaskCard({
 
         .mobile-task-card-footer {
           display: flex;
+          flex-wrap: wrap;
           gap: 8px;
           padding-top: 12px;
-          border-top: 1px solid #E8EDF2;
+          border-top: 1px solid #e2e9ef;
         }
 
         .mobile-task-card-footer .ant-btn {
-          min-height: 44px;
-          border-radius: 8px;
+          min-height: 40px;
+          border-radius: 10px;
+          font-weight: 600;
         }
 
         .mobile-task-card-footer .execute-btn {
-          flex: 2;
+          flex: 1 1 100%;
         }
 
         .mobile-task-card-footer .config-btn,
         .mobile-task-card-footer .test-btn,
         .mobile-task-card-footer .toggle-btn {
-          flex: 1;
-        }
-
-        /* 暗黑模式适配 */
-        @media (prefers-color-scheme: dark) {
-          .mobile-task-card {
-            background: #1a1a2e;
-          }
-
-          .mobile-task-card-title,
-          .mobile-task-card-row .value {
-            color: #eaeaea;
-          }
-
-          .mobile-task-card-row .label,
-          .mobile-task-card-description {
-            color: #b8b8b8;
-          }
-
-          .mobile-task-card-description {
-            background: #16213e;
-          }
-
-          .mobile-task-card-footer {
-            border-top-color: #2a2a4e;
-          }
+          flex: 1 1 calc(33.333% - 6px);
+          min-width: 92px;
         }
       `}</style>
     </Card>
@@ -282,15 +266,15 @@ export function MobileTaskCard({
 }
 
 /**
- * 移动端任务实例状态卡片
+ * 绉诲姩绔换鍔″疄渚嬬姸鎬佸崱鐗?
  */
 export interface MobileTaskInstanceCardProps {
   instance: TaskInstance;
-  taskName?: string; // 可选的任务名称
+  taskName?: string; // 鍙€夌殑浠诲姟鍚嶇О
   onStop?: () => void;
   onDelete?: () => void;
   onViewLogs?: () => void;
-  latestLog?: { timestamp: string; message: string; level: string }; // 最新日志（从外部传入）
+  latestLog?: { timestamp: string; message: string; level: string }; // 鏈€鏂版棩蹇楋紙浠庡閮ㄤ紶鍏ワ級
 }
 
 export function MobileTaskInstanceCard({
@@ -304,11 +288,13 @@ export function MobileTaskInstanceCard({
   const getStatusConfig = () => {
     switch (instance.status) {
       case TaskStatus.RUNNING:
-        return { icon: <PlayCircleOutlined />, color: 'blue', text: '执行中' };
+        return { icon: <PlayCircleOutlined />, color: 'blue', text: '运行中' };
+      case TaskStatus.PAUSED:
+        return { icon: <ClockCircleOutlined />, color: 'orange', text: '停止中' };
       case TaskStatus.SUCCESS:
         return { icon: <CheckCircleOutlined />, color: 'green', text: '已完成' };
       case TaskStatus.ERROR:
-        return { icon: <CloseCircleOutlined />, color: 'red', text: '出错' };
+        return { icon: <CloseCircleOutlined />, color: 'red', text: '失败' };
       case TaskStatus.WARNING:
         return { icon: <CloseCircleOutlined />, color: 'orange', text: '部分成功' };
       default:
@@ -416,7 +402,7 @@ export function MobileTaskInstanceCard({
               停止
             </Button>
           )}
-          {instance.status !== TaskStatus.RUNNING && instance.status !== TaskStatus.IDLE && onDelete && (
+          {instance.status !== TaskStatus.RUNNING && instance.status !== TaskStatus.PAUSED && instance.status !== TaskStatus.IDLE && onDelete && (
             <Button
               size="middle"
               danger
@@ -429,9 +415,11 @@ export function MobileTaskInstanceCard({
 
       <style>{`
         .mobile-instance-card {
-          margin-bottom: 12px;
-          border-radius: 12px;
-          background: #ffffff;
+          margin-bottom: 14px;
+          border-radius: 14px;
+          background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+          border: 1px solid #d9e1e7;
+          box-shadow: 0 8px 20px rgba(90, 110, 126, 0.08);
         }
 
         .mobile-instance-header {
@@ -447,8 +435,8 @@ export function MobileTaskInstanceCard({
         .mobile-instance-title {
           margin: 0;
           font-size: 15px;
-          font-weight: 600;
-          color: #2C3E50;
+          font-weight: 700;
+          color: #2f4454;
         }
 
         .mobile-instance-progress {
@@ -461,14 +449,14 @@ export function MobileTaskInstanceCard({
         .progress-bar {
           flex: 1;
           height: 8px;
-          background: #E8EDF2;
+          background: #dee7ef;
           border-radius: 4px;
           overflow: hidden;
         }
 
         .progress-fill {
           height: 100%;
-          background: linear-gradient(90deg, #4A90E2 0%, #7AB8F5 100%);
+          background: linear-gradient(90deg, #617f93 0%, #7f9caf 100%);
           border-radius: 4px;
           transition: width 0.3s ease;
         }
@@ -476,13 +464,14 @@ export function MobileTaskInstanceCard({
         .progress-text {
           font-size: 13px;
           font-weight: 600;
-          color: #4A90E2;
+          color: #4f677b;
           min-width: 45px;
           text-align: right;
         }
 
         .mobile-instance-time {
-          background: #F8FAFC;
+          background: #f2f7fa;
+          border: 1px solid #dee6ec;
           padding: 10px 12px;
           border-radius: 8px;
           margin-bottom: 12px;
@@ -495,23 +484,24 @@ export function MobileTaskInstanceCard({
         }
 
         .time-row .label {
-          color: #5D6D7E;
+          color: #697e8d;
           margin-right: 8px;
           white-space: nowrap;
         }
 
         .time-row .value {
-          color: #2C3E50;
+          color: #30495a;
           word-break: break-word;
         }
 
         .mobile-instance-logs {
-          background: #1a1a2e;
-          color: #eaeaea;
+          background: #f6f9fc;
+          color: #344b5d;
+          border: 1px dashed #d5e0e8;
           padding: 10px 12px;
           border-radius: 8px;
           margin-bottom: 12px;
-          font-family: 'Monaco', 'Menlo', monospace;
+          font-family: 'Consolas', 'Monaco', monospace;
           font-size: 12px;
           max-height: 100px;
           overflow-y: auto;
@@ -523,7 +513,7 @@ export function MobileTaskInstanceCard({
         }
 
         .log-time {
-          color: #7AB8F5;
+          color: #648094;
           white-space: nowrap;
         }
 
@@ -535,42 +525,16 @@ export function MobileTaskInstanceCard({
           display: flex;
           gap: 8px;
           padding-top: 12px;
-          border-top: 1px solid #E8EDF2;
+          border-top: 1px solid #e2e9ef;
         }
 
         .mobile-instance-footer .ant-btn {
-          min-height: 44px;
-          border-radius: 8px;
-        }
-
-        /* 暗黑模式适配 */
-        @media (prefers-color-scheme: dark) {
-          .mobile-instance-card {
-            background: #1a1a2e;
-          }
-
-          .mobile-instance-title,
-          .time-row .value {
-            color: #eaeaea;
-          }
-
-          .mobile-instance-time {
-            background: #16213e;
-          }
-
-          .time-row .label {
-            color: #b8b8b8;
-          }
-
-          .progress-bar {
-            background: #2a2a4e;
-          }
-
-          .mobile-instance-footer {
-            border-top-color: #2a2a4e;
-          }
+          min-height: 40px;
+          border-radius: 10px;
+          font-weight: 600;
         }
       `}</style>
     </Card>
   );
 }
+

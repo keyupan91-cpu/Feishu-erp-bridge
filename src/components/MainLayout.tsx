@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Layout, Menu, Button, Avatar, Dropdown, Space, Typography, Badge, Tooltip } from 'antd';
+import { Layout, Menu, Button, Avatar, Dropdown, Typography } from 'antd';
 import {
   MenuFoldOutlined,
   MenuUnfoldOutlined,
@@ -8,11 +8,9 @@ import {
   ApiOutlined,
   UserOutlined,
   LogoutOutlined,
-  QuestionCircleOutlined,
-  SettingOutlined,
-  BellOutlined,
 } from '@ant-design/icons';
 import { useAccountStore } from '../stores/accountStore';
+import BrandLogo from './BrandLogo';
 
 const { Header, Sider, Content } = Layout;
 const { Text } = Typography;
@@ -47,12 +45,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     {
       key: 'debugger',
       icon: <ApiOutlined />,
-      label: 'API调试',
-    },
-    {
-      key: 'help',
-      icon: <QuestionCircleOutlined />,
-      label: '帮助文档',
+      label: 'API 调试',
     },
   ];
 
@@ -61,11 +54,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       key: 'profile',
       icon: <UserOutlined />,
       label: '个人信息',
-    },
-    {
-      key: 'settings',
-      icon: <SettingOutlined />,
-      label: '设置',
     },
     {
       type: 'divider' as const,
@@ -78,6 +66,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     },
   ];
 
+  const tabDescriptions: Record<string, string> = {
+    tasks: '配置并拖拽排序任务，快速管理同步策略',
+    monitoring: '查看执行进度、日志与失败原因',
+    debugger: '预览和排查 WebAPI 请求与响应',
+  };
+
   const handleUserMenuClick = ({ key }: { key: string }) => {
     if (key === 'logout') {
       onLogout();
@@ -86,86 +80,70 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 
   return (
     <Layout style={styles.layout}>
-      {/* 侧边栏 */}
       <Sider
         trigger={null}
         collapsible
         collapsed={collapsed}
         style={styles.sider}
-        width={240}
-        collapsedWidth={80}
+        width={248}
+        collapsedWidth={84}
+        className="fresh-sider"
       >
-        {/* Logo区域 */}
-        <div style={styles.logo}>
+        <div style={styles.logoWrap}>
           <div style={styles.logoIcon}>
-            <ApiOutlined />
+            <BrandLogo size={collapsed ? 36 : 42} />
           </div>
           {!collapsed && (
             <div style={styles.logoText}>
-              <span style={styles.logoTitle}>金蝶数据传输</span>
-              <span style={styles.logoSubtitle}>Data Bridge</span>
+              <span style={styles.logoTitle}>金蝶数据传输平台</span>
+              <span style={styles.logoSubtitle}>Fresh ERP Bridge</span>
             </div>
           )}
         </div>
 
-        {/* 菜单 */}
         <Menu
           mode="inline"
           selectedKeys={[activeTab]}
           items={menuItems}
           onClick={({ key }) => onTabChange(key)}
           style={styles.menu}
+          className="fresh-side-menu"
         />
 
-        {/* 底部折叠按钮 */}
-        <div style={styles.collapseBtn}>
+        <div style={styles.collapseBtnWrap}>
           <Button
             type="text"
             icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             onClick={() => setCollapsed(!collapsed)}
-            style={styles.collapseIcon}
+            style={styles.collapseBtn}
           />
         </div>
       </Sider>
 
-      {/* 右侧内容区 */}
       <Layout>
-        {/* 顶部导航栏 */}
         <Header style={styles.header}>
           <div style={styles.headerLeft}>
-            <Text style={styles.pageTitle}>
-              {menuItems.find(item => item.key === activeTab)?.label || '首页'}
-            </Text>
+            <div style={styles.pageTitleWrap}>
+              <Text style={styles.pageTitle}>
+                {menuItems.find(item => item.key === activeTab)?.label || '首页'}
+              </Text>
+              <Text style={styles.pageSubtitle}>
+                {tabDescriptions[activeTab] || '金蝶与飞书数据同步工作台'}
+              </Text>
+            </div>
           </div>
 
           <div style={styles.headerRight}>
-            {/* 通知 */}
-            <Tooltip title="通知">
-              <Badge count={0} size="small">
-                <Button type="text" icon={<BellOutlined />} style={styles.headerBtn} />
-              </Badge>
-            </Tooltip>
-
-            {/* 用户信息 */}
-            <Dropdown
-              menu={{ items: userMenuItems, onClick: handleUserMenuClick }}
-              placement="bottomRight"
-            >
-              <div style={styles.userInfo}>
-                <Avatar
-                  size="small"
-                  style={{ backgroundColor: '#4facfe' }}
-                  icon={<UserOutlined />}
-                />
-                <Text style={styles.userName}>
-                  {currentAccount?.username || '用户'}
-                </Text>
+            <Dropdown menu={{ items: userMenuItems, onClick: handleUserMenuClick }} placement="bottomRight">
+              <div style={styles.userPanel} className="fresh-user-panel">
+                <Avatar size="small" style={styles.userAvatar} icon={<UserOutlined />} />
+                <span style={styles.userOnlineDot} />
+                <Text style={styles.userName}>{currentAccount?.username || '用户'}</Text>
               </div>
             </Dropdown>
           </div>
         </Header>
 
-        {/* 主内容区域 */}
         <Content style={styles.content}>
           {children}
         </Content>
@@ -177,32 +155,28 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 const styles: { [key: string]: React.CSSProperties } = {
   layout: {
     minHeight: '100vh',
-    background: '#f0f2f5',
+    background: 'linear-gradient(180deg, #f5f8fa 0%, #edf3f6 100%)',
   },
   sider: {
-    background: 'linear-gradient(180deg, #2d3a4f 0%, #1e2a3a 100%)',
-    boxShadow: '2px 0 8px rgba(0, 0, 0, 0.15)',
+    background: 'linear-gradient(180deg, #f2f6f9 0%, #e8eef3 100%)',
+    borderRight: '1px solid #d7e0e7',
+    boxShadow: '2px 0 14px rgba(86, 103, 117, 0.08)',
     position: 'relative',
   },
-  logo: {
-    height: '80px',
+  logoWrap: {
+    height: '86px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '16px',
-    borderBottom: '1px solid rgba(255, 255, 255, 0.15)',
+    padding: '14px',
+    borderBottom: '1px solid rgba(126, 143, 156, 0.22)',
   },
   logoIcon: {
-    width: '40px',
-    height: '40px',
-    background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    borderRadius: '12px',
+    width: '44px',
+    height: '44px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '20px',
-    color: '#fff',
-    boxShadow: '0 4px 15px rgba(79, 172, 254, 0.4)',
   },
   logoText: {
     marginLeft: '12px',
@@ -210,78 +184,108 @@ const styles: { [key: string]: React.CSSProperties } = {
     flexDirection: 'column',
   },
   logoTitle: {
-    color: '#ffffff',
+    color: '#2c4253',
     fontSize: '16px',
-    fontWeight: 600,
-    letterSpacing: '1px',
+    fontWeight: 700,
+    letterSpacing: '0.25px',
   },
   logoSubtitle: {
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#677d8d',
     fontSize: '11px',
-    letterSpacing: '0.5px',
+    marginTop: '2px',
+    letterSpacing: '0.3px',
   },
   menu: {
     background: 'transparent',
     border: 'none',
     marginTop: '16px',
+    padding: '0 8px',
   },
-  collapseBtn: {
+  collapseBtnWrap: {
     position: 'absolute',
-    bottom: '20px',
+    bottom: '16px',
     left: '50%',
     transform: 'translateX(-50%)',
   },
-  collapseIcon: {
-    color: 'rgba(255, 255, 255, 0.85)',
+  collapseBtn: {
+    color: '#607988',
     fontSize: '18px',
+    width: 40,
+    height: 40,
+    borderRadius: '12px',
   },
   header: {
-    background: '#fff',
+    background: 'rgba(251, 253, 255, 0.93)',
+    backdropFilter: 'blur(8px)',
     padding: '0 24px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    boxShadow: '0 1px 4px rgba(0, 0, 0, 0.08)',
-    height: '64px',
+    borderBottom: '1px solid #dbe3e8',
+    height: '68px',
   },
   headerLeft: {
     display: 'flex',
     alignItems: 'center',
   },
+  pageTitleWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '2px',
+  },
   pageTitle: {
-    fontSize: '18px',
-    fontWeight: 600,
-    color: '#1a1a2e',
+    fontSize: '20px',
+    fontWeight: 700,
+    color: '#263c4d',
+    letterSpacing: '0.25px',
+  },
+  pageSubtitle: {
+    fontSize: '13px',
+    color: '#5f7384',
+    letterSpacing: '0.15px',
   },
   headerRight: {
     display: 'flex',
     alignItems: 'center',
-    gap: '16px',
+    gap: '14px',
   },
-  headerBtn: {
-    color: '#666',
+  headerIconBtn: {
+    color: '#657b8b',
   },
-  userInfo: {
+  userPanel: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     cursor: 'pointer',
     padding: '4px 12px',
     borderRadius: '20px',
-    background: '#f5f5f5',
-    transition: 'all 0.3s',
+    background: '#e9f0f4',
+    border: '1px solid #ced9e1',
+    transition: 'all 0.2s ease',
+  },
+  userAvatar: {
+    backgroundColor: '#597a8d',
+  },
+  userOnlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: '#6ca9bf',
+    boxShadow: '0 0 0 2px rgba(255,255,255,0.8)',
   },
   userName: {
-    color: '#333',
+    color: '#31485a',
     fontSize: '14px',
+    fontWeight: 600,
   },
   content: {
-    margin: '24px',
-    padding: '24px',
-    background: '#fff',
-    borderRadius: '12px',
-    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.06)',
-    minHeight: 'calc(100vh - 112px)',
+    margin: '18px',
+    padding: '22px',
+    background: 'linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)',
+    borderRadius: '16px',
+    border: '1px solid #d8e1e8',
+    boxShadow: '0 10px 24px rgba(86, 103, 117, 0.08)',
+    minHeight: 'calc(100vh - 104px)',
     overflow: 'auto',
   },
 };

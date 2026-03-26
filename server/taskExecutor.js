@@ -1,9 +1,71 @@
-// 后端任务执行器 - 将任务执行从前端迁移到后端
-// 支持关闭浏览器后任务继续运行
+﻿// 閸氬海顏禒璇插閹笛嗩攽閸?- 鐏忓棔鎹㈤崝鈩冨⒔鐞涘奔绮犻崜宥囶伂鏉╀胶些閸掓澘鎮楃粩?
+// 閺€顖涘瘮閸忔娊妫村ù蹇氼潔閸ｃ劌鎮楁禒璇插缂佈呯敾鏉╂劘顢?
 
 import axios from 'axios';
+import { createRequire } from 'module';
 
-// 飞书字段类型编码
+const require = createRequire(import.meta.url);
+let iconvLite = null;
+try {
+  iconvLite = require('iconv-lite');
+} catch {
+  iconvLite = null;
+}
+
+const MOJIBAKE_HINT_REGEX = /淇濆瓨|鍚屾|鏃犳硶|鑾峰彇|鍥炲啓|鏈嶅姟鍣|璇锋眰|鍙戦€?/;
+
+function tryRepairMojibake(text) {
+  if (!text || !iconvLite || !MOJIBAKE_HINT_REGEX.test(text)) {
+    return text;
+  }
+
+  try {
+    const repaired = iconvLite.decode(iconvLite.encode(text, 'gbk'), 'utf8');
+    if (!repaired || repaired.includes('�')) {
+      return text;
+    }
+    return repaired;
+  } catch {
+    return text;
+  }
+}
+
+function normalizeUserFacingText(value) {
+  if (value === null || value === undefined) {
+    return '';
+  }
+
+  const text = tryRepairMojibake(String(value));
+  return text
+    .replace(/淇濆瓨澶辫触/g, '保存失败')
+    .replace(/鍚屾鎴愬姛/g, '同步成功')
+    .replace(/鍚屾澶辫触/g, '同步失败')
+    .replace(/鏃犳硶鎻愬彇/g, '无法提取')
+    .replace(/鑾峰彇椋炰功浠ょ墝澶辫触/g, '获取飞书令牌失败')
+    .replace(/鑾峰彇鏁版嵁澶辫触/g, '获取数据失败')
+    .replace(/鑾峰彇椋炰功鏁版嵁澶辫触/g, '获取飞书数据失败')
+    .replace(/鍥炲啓鏁版嵁澶辫触/g, '回写数据失败');
+}
+
+function normalizeTextValue(value) {
+  if (typeof value === 'string') {
+    return normalizeUserFacingText(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(item => normalizeTextValue(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, inner]) => [key, normalizeTextValue(inner)])
+    );
+  }
+
+  return value;
+}
+
+// 妞嬬偘鍔熺€涙顔岀猾璇茬€风紓鏍垳
 const FeishuFieldType = {
   TEXT: 1,
   NUMBER: 2,
@@ -25,7 +87,7 @@ const FeishuFieldType = {
   AUTO_NUMBER: 1005,
 };
 
-// 格式化日期值
+// 閺嶇厧绱￠崠鏍ㄦ）閺堢喎鈧?
 function formatDate(value, format = 'YYYY-MM-DD') {
   if (value === null || value === undefined || value === '') {
     return '';
@@ -66,7 +128,7 @@ function formatDate(value, format = 'YYYY-MM-DD') {
   }
 }
 
-// 提取人员/多选字段的文本值
+// 鎻愬彇浜哄憳/婢舵岸鈧鐡у▓电殑鏂囨湰鍊?
 function extractTextValue(value) {
   if (value === null || value === undefined) {
     return '';
@@ -96,7 +158,7 @@ function extractTextValue(value) {
   return String(value);
 }
 
-// 任务状态
+// 娴犺姟鐘舵€?
 export const TaskStatus = {
   IDLE: 'idle',
   RUNNING: 'running',
@@ -106,12 +168,12 @@ export const TaskStatus = {
   WARNING: 'warning'
 };
 
-// 正在运行的任务实例
+// 濮濓絽婀潻鎰攽閻ㄥ嫪鎹㈤崝鈥崇杽娓?
 const runningTasks = new Map();
 
-// 飞书服务类
+// 妞嬬偘鍔熼張宥呭缁?
 class FeishuService {
-  constructor(config) {
+  constructor(config, options = {}) {
     this.appId = config.appId;
     this.appSecret = config.appSecret;
     this.appToken = config.appToken;
@@ -137,7 +199,7 @@ class FeishuService {
         throw new Error(`获取飞书令牌失败: ${response.data.msg}`);
       }
     } catch (error) {
-      console.error('获取飞书访问令牌失败:', error.message);
+      console.error('鑾峰彇椋炰功璁块棶浠ょ墝澶辫触:', error.message);
       throw error;
     }
   }
@@ -166,7 +228,10 @@ class FeishuService {
       const allItems = [];
       let pageToken = undefined;
 
+      let lastPageToken = undefined;
       while (true) {
+        // Always use search endpoint so returned field keys remain field_name.
+        // Using list endpoint returns field_id keys and breaks field-name based filtering.
         const response = await axios.post(
           `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/search`,
           requestBody,
@@ -186,8 +251,10 @@ class FeishuService {
         if (response.data.code === 0) {
           const items = response.data.data?.items || [];
           allItems.push(...items);
-          pageToken = response.data.data?.page_token;
-          if (!pageToken) break;
+          const hasMore = response.data.data?.has_more === true;
+          pageToken = hasMore ? response.data.data?.page_token : undefined;
+          if (!hasMore || !pageToken || pageToken === lastPageToken) break;
+          lastPageToken = pageToken;
         } else {
           throw new Error(`获取数据失败: ${response.data.msg}`);
         }
@@ -200,9 +267,66 @@ class FeishuService {
 
       return { code: 0, data: { items, total: items.length } };
     } catch (error) {
-      console.error('获取飞书表格数据失败:', error.message);
+      console.error('鑾峰彇椋炰功琛ㄦ牸鏁版嵁澶辫触:', error.message);
       throw error;
     }
+  }
+
+  async getFields(tableId) {
+    try {
+      if (!this.accessToken) {
+        await this.getToken();
+      }
+
+      const allFields = [];
+      let pageToken = undefined;
+
+      let lastPageToken = undefined;
+      while (true) {
+        const response = await axios.get(
+          `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/fields`,
+          {
+            headers: {
+              'Authorization': `Bearer ${this.accessToken}`,
+              'Content-Type': 'application/json; charset=utf-8',
+            },
+            params: {
+              page_size: 500,
+              page_token: pageToken,
+            },
+            timeout: 30000,
+          }
+        );
+
+        if (response.data.code !== 0) {
+          throw new Error(`閼惧嘲褰囩€涙顔岄崚妤勩€冩径杈Е: ${response.data.msg}`);
+        }
+
+        const items = response.data.data?.items || [];
+        allFields.push(...items);
+
+        const hasMore = response.data.data?.has_more === true;
+        pageToken = hasMore ? response.data.data?.page_token : undefined;
+        if (!hasMore || !pageToken || pageToken === lastPageToken) break;
+        lastPageToken = pageToken;
+      }
+
+      return allFields;
+    } catch (error) {
+      console.error('閼惧嘲褰囨鐐板姛鐎涙顔岄崚妤勩€冩径杈Е:', error.message);
+      throw error;
+    }
+  }
+
+  async getFieldNameMap(tableId) {
+    const fields = await this.getFields(tableId);
+    const map = new Map();
+    fields.forEach(field => {
+      if (field?.field_id && field?.field_name) {
+        map.set(field.field_id, field.field_name);
+      }
+    });
+    return map;
   }
 
   buildFilter(conditions) {
@@ -263,13 +387,14 @@ class FeishuService {
     if (Array.isArray(fieldValue)) {
       return fieldValue.map(item => {
         if (typeof item === 'object' && item.text) return item.text;
+        if (typeof item === 'object' && item.name) return item.name;
         return String(item);
       }).join('');
     }
     if (typeof fieldValue === 'object') {
-      if (fieldValue.value && Array.isArray(fieldValue.value)) return fieldValue.value[0];
-      if (fieldValue.text) return fieldValue.text;
-      if (fieldValue.value !== undefined) return fieldValue.value;
+      if (fieldValue.text !== undefined) return fieldValue.text;
+      if (fieldValue.name !== undefined) return fieldValue.name;
+      if (fieldValue.value !== undefined) return this.extractFieldValue(fieldValue.value);
       return JSON.stringify(fieldValue);
     }
     return fieldValue;
@@ -334,17 +459,17 @@ class FeishuService {
         throw new Error(`回写数据失败: ${response.data.msg}`);
       }
     } catch (error) {
-      console.error('回写数据到飞书失败:', error.message);
+      console.error('閸ョ偛鍟撻弫鐗堝祦閸掍即顥ｆ稊锕€け璐?', error.message);
       throw error;
     }
   }
 }
 
-// 金蝶服务类
+// 闁叉垼婢忛張宥呭缁?
 class KingdeeService {
-  constructor(config) {
-    // 使用本地后端代理路径，而不是直接访问金蝶URL
-    // 后端代理会自动处理 Cookie
+  constructor(config, options = {}) {
+    // 娴ｈ法鏁ら張顒€婀撮崥搴ｎ伂娴狅絿鎮婄捄顖氱窞閿涘矁鈧奔绗夐弰顖滄纯閹恒儴顔栭梻顕€噾铦禪RL
+    // 閸氬海顏禒锝囨倞娴兼俺鍤滈崝銊ヮ槱閻?Cookie
     this.baseUrl = 'http://localhost:3001/K3Cloud';
     this.kingdeeBaseUrl = config.loginParams.baseUrl || 'http://47.113.148.159:8090';
     this.username = config.loginParams.username;
@@ -352,9 +477,12 @@ class KingdeeService {
     this.acctId = config.loginParams.acctId || config.loginParams.dbId;
     this.isLoggedIn = false;
     this.loginTime = 0;
-    this.SESSION_TIMEOUT = 30 * 60 * 1000;
+    this.SESSION_TIMEOUT = 4 * 60 * 60 * 1000;
     // Cookie 存储
     this.cookies = '';
+    this.sessionKey = options.sessionKey || `kingdee-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    this.loginPromise = null;
+    this.defaultApiMethod = config.apiMethod || 'Save';
   }
 
   isSessionValid() {
@@ -364,6 +492,10 @@ class KingdeeService {
 
   markLoggedIn() {
     this.isLoggedIn = true;
+    this.loginTime = Date.now();
+  }
+
+  touchSession() {
     this.loginTime = Date.now();
   }
 
@@ -377,29 +509,43 @@ class KingdeeService {
   extractCookies(response) {
     const setCookieHeader = response.headers['set-cookie'];
     if (setCookieHeader) {
-      // axios 返回的 set-cookie 可能是字符串或数组
+      // axios 鏉╂柨娲栭惃?set-cookie 閸欘垵鍏橀弰顖氱摟缁楋缚瑕嗛幋鏍ㄦ殶缂?
       if (Array.isArray(setCookieHeader)) {
         this.cookies = setCookieHeader.map(cookie => cookie.split(';')[0]).join('; ');
       } else {
         this.cookies = setCookieHeader.split(';')[0];
       }
-      console.log('金蝶登录 Cookie 已保存:', this.cookies);
+      console.log('閲戣澏鐧诲綍 Cookie 瀹歌弓绻氱€?', this.cookies);
     } else {
-      console.log('金蝶登录响应中没有 Set-Cookie header');
+      console.log('闁叉垼婢忛惂璇茬秿閸濆秴绨叉稉顓熺梾閺?Set-Cookie header');
     }
   }
 
-  async login() {
+  async login(force = false) {
+    if (!force && this.isSessionValid()) {
+      return true;
+    }
+    if (this.loginPromise) {
+      return this.loginPromise;
+    }
+    this.loginPromise = this._loginInternal(force).finally(() => {
+      this.loginPromise = null;
+    });
+    return this.loginPromise;
+  }
+
+  async _loginInternal(force = false) {
     try {
       const url = `${this.baseUrl}/Kingdee.BOS.WebApi.ServicesStub.AuthService.ValidateUser.common.kdsvc`;
-      console.log('金蝶登录请求 (通过后端代理):', { url, acctId: this.acctId, username: this.username });
+      console.log('闁叉垼婢忛惂璇茬秿鐠囬攱鐪?(闁俺绻冮崥搴ｎ伂娴狅絿鎮?:', { url, acctId: this.acctId, username: this.username, sessionKey: this.sessionKey, force });
 
       const response = await axios.post(url, {
         acctID: this.acctId || '',
         username: this.username,
         password: this.password,
         lcid: 2052,
-        baseUrl: this.kingdeeBaseUrl,  // 传递金蝶服务器地址给代理
+        sessionKey: this.sessionKey,
+        baseUrl: this.kingdeeBaseUrl,  // 娴肩娀鈧帡鍣鹃摝鑸垫箛閸斺€虫珤閸︽澘娼冪紒娆庡敩閻?
       }, {
         headers: { 'Content-Type': 'application/json' },
         timeout: 20000,
@@ -417,7 +563,7 @@ class KingdeeService {
         return true;
       } else {
         this.clearSession();
-        const errorMsg = response.data.Message || `登录失败，错误码: ${response.data.LoginResultType}`;
+        const errorMsg = response.data.Message || `登录失败，返回码: ${response.data.LoginResultType}`;
         console.error('金蝶登录失败:', errorMsg);
         return false;
       }
@@ -437,9 +583,11 @@ class KingdeeService {
         }
       }
 
-      const url = `${this.baseUrl}/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.Save.common.kdsvc`;
+      const apiMethod = this.resolveDynamicFormApiMethod(data);
+      const payloadData = this.stripTemplateMetaFields(data);
+      const requestMeta = this.buildDynamicFormRequest(formId, apiMethod, payloadData);
 
-      // 准备请求头，包含 Cookie
+      // 閸戝棗顦拠閿嬬湴婢惰揪绱濋崠鍛儓 Cookie
       const headers = {
         'Content-Type': 'application/json',
       };
@@ -447,20 +595,18 @@ class KingdeeService {
         headers['Cookie'] = this.cookies;
       }
 
-      console.log('金蝶保存请求 (通过后端代理):', {
-        url,
+      console.log('闁叉垼婢忔穱婵嗙摠鐠囬攱鐪?(闁俺绻冮崥搴ｎ伂娴狅絿鎮?:', {
+        url: requestMeta.url,
+        endpointMethod: requestMeta.endpointMethod,
+        apiMethod,
         formId,
         hasCookie: !!this.cookies,
-        dataPreview: JSON.stringify(data).substring(0, 200) + '...'
+        dataPreview: JSON.stringify(payloadData).substring(0, 200) + '...'
       });
 
-      const response = await axios.post(url, {
-        formid: formId,
-        data: data,
-        baseUrl: this.kingdeeBaseUrl,  // 传递金蝶服务器地址给代理
-      }, {
+      const response = await axios.post(requestMeta.url, requestMeta.requestBody, {
         headers,
-        timeout: 60000,  // 增加到 60 秒超时
+        timeout: 60000,  // 婢х偛濮為崚?60 绉掕秴鏃?
       });
 
       console.log('金蝶保存响应:', {
@@ -469,8 +615,20 @@ class KingdeeService {
         status: response.data.Result?.ResponseStatus?.IsSuccess
       });
 
+      if (response.data?.error) {
+        const rawResponseText = response.data?.rawResponse
+          ? `，原始响应: ${normalizeUserFacingText(response.data.rawResponse)}`
+          : '';
+        const error = new Error(`保存失败: ${normalizeUserFacingText(response.data.error)}${rawResponseText}`);
+        error.responseData = response.data;
+        throw error;
+      }
+
+      // Sliding session window: keep task session alive while records are being processed.
+      this.touchSession();
+
       if (response.data.Exception) {
-        const error = new Error(`保存失败: ${response.data.Exception}`);
+        const error = new Error(`保存失败: ${normalizeUserFacingText(response.data.Exception)}`);
         error.responseData = response.data;
         throw error;
       }
@@ -478,7 +636,7 @@ class KingdeeService {
       if (response.data.Result?.ResponseStatus) {
         const status = response.data.Result.ResponseStatus;
         if (!status.IsSuccess && status.Errors && status.Errors.length > 0) {
-          const errorMessages = status.Errors.map(e => e.Message).join('; ');
+          const errorMessages = status.Errors.map(e => normalizeUserFacingText(e.Message)).join('; ');
           const error = new Error(`保存失败: ${errorMessages}`);
           error.responseData = response.data;
           throw error;
@@ -487,36 +645,116 @@ class KingdeeService {
 
       return response.data;
     } catch (error) {
-      console.error('保存数据到金蝶失败:', error.message);
+      console.error('娣囨繂鐡ㄩ弫鐗堝祦閸掍即鍣鹃摝璺恒亼鐠?', error.message);
       if (error.response) {
         const errorData = error.response.data;
-        const enhancedError = new Error(`保存失败: ${errorData?.Exception || error.message}`);
+        const enhancedError = new Error(`保存失败: ${normalizeUserFacingText(errorData?.Exception || error.message)}`);
         enhancedError.responseData = errorData;
         throw enhancedError;
       }
       throw error;
     }
   }
+
+  resolveDynamicFormApiMethod(data) {
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const explicitMethod = data.__apiMethod || data.__api || data.__operation;
+      if (typeof explicitMethod === 'string' && explicitMethod.trim()) {
+        return explicitMethod.trim();
+      }
+
+      // Heuristic for "禁用/反禁用" payloads:
+      // they usually use Numbers/CreateOrgId/UseOrgId and do not include Model.
+      const hasModel = Object.prototype.hasOwnProperty.call(data, 'Model');
+      const hasNumbers = Array.isArray(data.Numbers);
+      const hasCreateOrgId = Object.prototype.hasOwnProperty.call(data, 'CreateOrgId');
+      const hasUseOrgId = Object.prototype.hasOwnProperty.call(data, 'UseOrgId');
+      const hasIds = Object.prototype.hasOwnProperty.call(data, 'Ids');
+      const hasPkEntryIds = Object.prototype.hasOwnProperty.call(data, 'PkEntryIds');
+      if (!hasModel && hasNumbers && hasCreateOrgId && hasUseOrgId && hasIds && hasPkEntryIds) {
+        return 'Forbid';
+      }
+    }
+
+    return this.defaultApiMethod || 'Save';
+  }
+
+  buildDynamicFormRequest(formId, apiMethod, payloadData) {
+    const normalizedMethod = typeof apiMethod === 'string' && apiMethod.trim()
+      ? apiMethod.trim()
+      : (this.defaultApiMethod || 'Save');
+
+    // Some environments fail when calling DynamicFormService.Forbid directly.
+    // For operation-style APIs, call ExcuteOperation with opNumber instead.
+    if (this.shouldUseExecuteOperation(normalizedMethod)) {
+      return {
+        endpointMethod: 'ExcuteOperation',
+        url: `${this.baseUrl}/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.ExcuteOperation.common.kdsvc`,
+        requestBody: {
+          formid: formId,
+          opNumber: normalizedMethod,
+          data: payloadData,
+          sessionKey: this.sessionKey,
+          baseUrl: this.kingdeeBaseUrl,
+        },
+      };
+    }
+
+    return {
+      endpointMethod: normalizedMethod,
+      url: `${this.baseUrl}/Kingdee.BOS.WebApi.ServicesStub.DynamicFormService.${normalizedMethod}.common.kdsvc`,
+      requestBody: {
+        formid: formId,
+        data: payloadData,
+        sessionKey: this.sessionKey,
+        baseUrl: this.kingdeeBaseUrl,
+      },
+    };
+  }
+
+  shouldUseExecuteOperation(apiMethod) {
+    if (!apiMethod || typeof apiMethod !== 'string') {
+      return false;
+    }
+    const method = apiMethod.trim().toLowerCase();
+    return method === 'forbid' || method === 'enable' || method === 'unforbid';
+  }
+
+  stripTemplateMetaFields(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      return data;
+    }
+
+    const cloned = { ...data };
+    delete cloned.__apiMethod;
+    delete cloned.__api;
+    delete cloned.__operation;
+    return cloned;
+  }
 }
 
-// 任务执行器类
+// 娴犺濮熼幍褑顢戦崳銊ц
 export class TaskExecutor {
-  constructor(task, instance, username, saveLogCallback, updateInstanceCallback) {
+  constructor(task, instance, username, saveLogCallback, updateInstanceCallback, options = {}) {
     this.task = task;
     this.instance = instance;
     this.username = username;
     this.saveLogCallback = saveLogCallback;
     this.updateInstanceCallback = updateInstanceCallback;
     this.feishuService = new FeishuService(task.feishuConfig);
-    this.kingdeeService = new KingdeeService(task.kingdeeConfig);
+    this.kingdeeService = new KingdeeService(task.kingdeeConfig, {
+      sessionKey: `${username}:${instance.id}`,
+    });
     this.isRunning = false;
     this.isStopped = false;
-    this.isStopping = false; // 安全停止标志：正在等待当前任务完成
+    this.isStopping = false;
     this.firstLogSaved = false;
-    this.executingPromises = []; // 正在执行的 Promise 列表
+    this.executingPromises = []; // 濮濓絽婀幍褑顢戦惃?Promise 閸掓銆?
+    this.firstRecordOnly = options.firstRecordOnly === true;
+    this.fieldNameById = new Map();
   }
 
-  // 更新实例状态
+  // 閺囧瓨鏌婄€圭偘绶ラ悩鑸碘偓?
   async updateInstance(updates) {
     Object.assign(this.instance, updates);
     if (this.updateInstanceCallback) {
@@ -524,10 +762,10 @@ export class TaskExecutor {
     }
   }
 
-  // 保存 WebAPI 日志（只保存第一条）
+  // 娣囨繂鐡?WebAPI 閺冦儱绻旈敍鍫濆涧娣囨繂鐡ㄧ粭顑跨閺夆槄绱?
   async saveWebApiLog(logData) {
     if (this.firstLogSaved) {
-      return false; // 已保存过，跳过
+      return false; // 瀹歌弓绻氱€涙绻冮敍宀冪儲鏉?
     }
     this.firstLogSaved = true;
 
@@ -537,7 +775,7 @@ export class TaskExecutor {
     return true;
   }
 
-  // 格式化字段值
+  // 閺嶇厧绱￠崠鏍х摟濞堥潧鈧?
   formatFieldValue(fieldValue, param, sourceFieldType) {
     const processType = param.processType || 'auto';
 
@@ -588,7 +826,7 @@ export class TaskExecutor {
     }
   }
 
-  // 格式化数据为金蝶格式
+  // 閺嶇厧绱￠崠鏍ㄦ殶閹诡喕璐熼柌鎴ｆ緩閺嶇厧绱?
   formatDataForKingdee(fields) {
     const { fieldParams } = this.task.feishuConfig;
     const result = {};
@@ -598,7 +836,7 @@ export class TaskExecutor {
         return;
       }
 
-      const rawFieldValue = fields[param.fieldName];
+      const rawFieldValue = this.getRawFieldValue(fields, param);
       const sourceFieldType = param.sourceFieldType;
       let fieldValue = this.feishuService.extractFieldValue(rawFieldValue);
       fieldValue = this.formatFieldValue(fieldValue, param, sourceFieldType);
@@ -611,7 +849,171 @@ export class TaskExecutor {
     return result;
   }
 
-  // 替换模板中的占位符
+  // 濡剝婢橀弴鎸庡床閺佺増宓侀敍姘祮娴ｅ灝鐡у▓鍏歌礋缁岀尨绱濇稊鐔活洣娣囨繄鏆€閸欐﹢鍣洪獮鑸垫禌閹诡澀璐熺粚鍝勭摟缁楋缚瑕?
+  buildTemplateReplacementData(fields) {
+    const { fieldParams } = this.task.feishuConfig;
+    const result = {};
+
+    fieldParams.forEach(param => {
+      if (!param.variableName || param.variableName.trim() === '') {
+        return;
+      }
+
+      const rawFieldValue = this.getRawFieldValue(fields, param);
+      const sourceFieldType = param.sourceFieldType;
+      let fieldValue = this.feishuService.extractFieldValue(rawFieldValue);
+      fieldValue = this.formatFieldValue(fieldValue, param, sourceFieldType);
+
+      if (fieldValue === undefined || fieldValue === null) {
+        fieldValue = '';
+      }
+
+      result[param.variableName] = fieldValue;
+    });
+
+    return result;
+  }
+
+  getRawFieldValue(fields, param) {
+    if (!fields || !param) {
+      return undefined;
+    }
+
+    let rawFieldValue = fields[param.fieldName];
+    if (rawFieldValue !== undefined && rawFieldValue !== null) {
+      return rawFieldValue;
+    }
+
+    const sourceFieldId = param.sourceFieldId;
+    if (sourceFieldId && this.fieldNameById?.size > 0) {
+      const currentFieldName = this.fieldNameById.get(sourceFieldId);
+      if (currentFieldName) {
+        rawFieldValue = fields[currentFieldName];
+      }
+    }
+
+    return rawFieldValue;
+  }
+
+  createTemplateContext() {
+    const { dataTemplate } = this.task.kingdeeConfig || {};
+    let parsedTemplate = null;
+    let templateParseFailed = false;
+
+    if (dataTemplate) {
+      try {
+        parsedTemplate = JSON.parse(dataTemplate);
+      } catch {
+        templateParseFailed = true;
+      }
+    }
+
+    return {
+      dataTemplate,
+      parsedTemplate,
+      templateParseFailed,
+    };
+  }
+
+  buildPayloadFromFields(fields, templateContext = this.createTemplateContext()) {
+    const formattedData = this.formatDataForKingdee(fields);
+    const templateReplacementData = this.buildTemplateReplacementData(fields);
+    let finalData = formattedData;
+
+    if (templateContext.parsedTemplate) {
+      const templateWithValues = this.replacePlaceholders(templateContext.parsedTemplate, templateReplacementData);
+      // Use template payload as-is after variable replacement.
+      // Do not append A/B/C... variables to root level.
+      finalData = templateWithValues;
+    } else if (templateContext.templateParseFailed && templateContext.dataTemplate) {
+      let templateWithValues = templateContext.dataTemplate;
+      for (const [key, value] of Object.entries(templateReplacementData)) {
+        const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+        let stringValue = '';
+        if (typeof value === 'number' || typeof value === 'boolean') {
+          stringValue = String(value);
+        } else if (typeof value === 'object' && value !== null) {
+          stringValue = value.text || value.value || String(value);
+        } else {
+          stringValue = String(value ?? '');
+        }
+
+        const hasQuotes = templateWithValues.match(new RegExp(`"\\{\\{${key}\\}\\}"`));
+
+        if (typeof value === 'number' || typeof value === 'boolean') {
+          templateWithValues = templateWithValues.replace(placeholder, stringValue);
+        } else if (hasQuotes) {
+          const escaped = JSON.stringify(stringValue);
+          templateWithValues = templateWithValues.replace(placeholder, escaped.slice(1, -1));
+        } else {
+          templateWithValues = templateWithValues.replace(placeholder, JSON.stringify(stringValue));
+        }
+      }
+
+      try {
+        finalData = JSON.parse(templateWithValues);
+        if (!finalData.Model) {
+          finalData = { Model: { ...formattedData } };
+        }
+      } catch {
+        finalData = { Model: { ...formattedData } };
+      }
+    }
+
+    const unresolvedVariables = Array.from(this.collectUnresolvedPlaceholders(finalData));
+
+    return {
+      formattedData,
+      templateReplacementData,
+      finalData,
+      unresolvedVariables,
+    };
+  }
+
+  async previewFirstRecordRequest() {
+    const { tableId, viewId, filterConditions } = this.task.feishuConfig || {};
+    const { formId } = this.task.kingdeeConfig || {};
+
+    if (!tableId) {
+      throw new Error('飞书表格 ID 未配置');
+    }
+    if (!formId) {
+      throw new Error('金蝶表单 ID 未配置');
+    }
+
+    const response = await this.feishuService.getTableData(tableId, viewId, filterConditions);
+    if (response.code !== 0) {
+      throw new Error(normalizeUserFacingText(response.msg || '获取飞书数据失败'));
+    }
+
+    const feishuData = response.data?.items || [];
+    if (feishuData.length === 0) {
+      throw new Error('没有符合筛选条件的飞书记录');
+    }
+
+    try {
+      this.fieldNameById = await this.feishuService.getFieldNameMap(tableId);
+    } catch {
+      this.fieldNameById = new Map();
+    }
+
+    const firstRecord = feishuData[0];
+    const fields = firstRecord.fields || {};
+    const payload = this.buildPayloadFromFields(fields, this.createTemplateContext());
+
+    return {
+      formId,
+      recordId: firstRecord.record_id,
+      filterMatchedCount: feishuData.length,
+      feishuFields: fields,
+      formattedData: payload.formattedData,
+      templateReplacementData: payload.templateReplacementData,
+      requestData: payload.finalData,
+      unresolvedVariables: payload.unresolvedVariables,
+    };
+  }
+
+  // 閺囨寧宕插Ο鈩冩緲娑擃厾娈戦崡鐘辩秴缁?
   replacePlaceholders(obj, replacement) {
     if (typeof obj === 'string') {
       let result = obj;
@@ -641,6 +1043,59 @@ export class TaskExecutor {
     return obj;
   }
 
+  // 閺€鍫曟肠濡剝婢樻稉顓熸弓鐞氼偅娴涢幑銏㈡畱閸楃姳缍呯粭锕€彉閲?
+  collectUnresolvedPlaceholders(obj, unresolved = new Set()) {
+    if (typeof obj === 'string') {
+      const placeholderRegex = /\{\{\s*([^{}]+?)\s*\}\}/g;
+      let match;
+      while ((match = placeholderRegex.exec(obj)) !== null) {
+        const variableName = String(match[1] || '').trim();
+        if (variableName) {
+          unresolved.add(variableName);
+        }
+      }
+      return unresolved;
+    }
+
+    if (Array.isArray(obj)) {
+      obj.forEach(item => this.collectUnresolvedPlaceholders(item, unresolved));
+      return unresolved;
+    }
+
+    if (obj !== null && typeof obj === 'object') {
+      Object.values(obj).forEach(value => this.collectUnresolvedPlaceholders(value, unresolved));
+      return unresolved;
+    }
+
+    return unresolved;
+  }
+
+  buildUnresolvedPlaceholderError(unresolvedVariables, fields) {
+    const { fieldParams = [] } = this.task.feishuConfig || {};
+    const maxCount = 5;
+
+    const details = unresolvedVariables.slice(0, maxCount).map(variableName => {
+      const matchedParam = fieldParams.find(param => param.variableName === variableName);
+      if (!matchedParam) {
+        return `{{${variableName}}}(未找到变量映射)`;
+      }
+
+      const sourceFieldName = matchedParam.fieldName || '(未配置字段名)';
+      const rawValue = this.getRawFieldValue(fields, matchedParam);
+      const extractedValue = this.feishuService.extractFieldValue(rawValue);
+      const valuePreview =
+        extractedValue === '' || extractedValue === null || extractedValue === undefined
+          ? '空值'
+          : String(extractedValue);
+
+      return `{{${variableName}}}->${sourceFieldName}=${valuePreview}`;
+    });
+
+    const restCount = unresolvedVariables.length - details.length;
+    const restSuffix = restCount > 0 ? ` 等 ${unresolvedVariables.length} 个变量` : '';
+    return `模板变量未成功替换：${details.join('，')}${restSuffix}。请检查当前记录对应字段值是否为空，或变量映射是否正确。`;
+  }
+
   // 处理回写逻辑
   async handleWriteBack(recordId, source, message, kingdeeResponse) {
     const { tableId, writeBackFields = [] } = this.task.feishuConfig;
@@ -663,9 +1118,9 @@ export class TaskExecutor {
             }
             value = value[key];
           }
-          writeBackData[field.fieldName] = value !== undefined ? value : '无法提取';
+          writeBackData[field.fieldName] = value !== undefined ? normalizeTextValue(value) : '无法提取';
         } else {
-          writeBackData[field.fieldName] = message || '同步成功';
+          writeBackData[field.fieldName] = normalizeUserFacingText(message || '同步成功');
         }
       } else if (field.source === 'error' && source === 'error') {
         if (field.jsonPath && kingdeeResponse) {
@@ -678,9 +1133,9 @@ export class TaskExecutor {
             }
             value = value[key];
           }
-          writeBackData[field.fieldName] = value !== undefined ? value : '无法提取';
+          writeBackData[field.fieldName] = value !== undefined ? normalizeTextValue(value) : '无法提取';
         } else {
-          writeBackData[field.fieldName] = message || '同步失败';
+          writeBackData[field.fieldName] = normalizeUserFacingText(message || '同步失败');
         }
       } else if (field.source === 'response' && kingdeeResponse) {
         if (field.jsonPath) {
@@ -693,9 +1148,11 @@ export class TaskExecutor {
             }
             value = value[key];
           }
-          writeBackData[field.fieldName] = value !== undefined ? value : '无法提取';
+          writeBackData[field.fieldName] = value !== undefined ? normalizeTextValue(value) : '无法提取';
         } else {
-          writeBackData[field.fieldName] = JSON.stringify(kingdeeResponse);
+          writeBackData[field.fieldName] = normalizeUserFacingText(
+            JSON.stringify(normalizeTextValue(kingdeeResponse))
+          );
         }
       }
     });
@@ -705,7 +1162,7 @@ export class TaskExecutor {
         await this.feishuService.writeBackData(tableId, recordId, writeBackData);
         return writeBackData;
       } catch (writeError) {
-        console.error('回写状态到飞书失败:', writeError.message);
+        console.error('閸ョ偛鍟撻悩鑸碘偓浣稿煂妞嬬偘鍔熸径杈Е:', writeError.message);
         return writeBackData;
       }
     }
@@ -713,7 +1170,7 @@ export class TaskExecutor {
     return null;
   }
 
-  // 执行任务
+  // 閹笛嗩攽娴犺濮?
   async execute() {
     if (this.isRunning) {
       throw new Error('任务正在执行中');
@@ -729,11 +1186,13 @@ export class TaskExecutor {
         progress: 0,
         successCount: 0,
         errorCount: 0,
+        isStopping: false,
+        stopRequestedAt: null,
       });
 
-      console.log(`[${this.instance.id}] 开始执行任务: ${this.task.name}`);
+      console.log(`[${this.instance.id}] 瀵偓婵澧界悰灞兼崲閸? ${this.task.name}`);
 
-      // 步骤 1: 从飞书获取数据
+      // 濮濄儵顎?1: 娴犲酣顥ｆ稊锕佸箯閸欐牗鏆熼幑?
       const { tableId, viewId, filterConditions } = this.task.feishuConfig;
       if (!tableId) {
         throw new Error('飞书表格 ID 未配置');
@@ -741,10 +1200,17 @@ export class TaskExecutor {
 
       const response = await this.feishuService.getTableData(tableId, viewId, filterConditions);
       if (response.code !== 0) {
-        throw new Error(response.msg || '获取飞书数据失败');
+        throw new Error(normalizeUserFacingText(response.msg || '获取飞书数据失败'));
       }
 
       const feishuData = response.data?.items || [];
+      try {
+        this.fieldNameById = await this.feishuService.getFieldNameMap(tableId);
+      } catch (fieldError) {
+        this.fieldNameById = new Map();
+        console.warn(`[${this.instance.id}] 閼惧嘲褰囩€涙顔岄弰鐘茬殸婢惰精瑙﹂敍灞界殺娴犲懏瀵滈柊宥囩枂鐎涙顔岄崥宥呭絿閸? ${fieldError.message}`);
+      }
+
       if (feishuData.length === 0) {
         await this.updateInstance({
           status: TaskStatus.SUCCESS,
@@ -755,37 +1221,36 @@ export class TaskExecutor {
         return;
       }
 
-      console.log(`[${this.instance.id}] 从飞书获取到 ${feishuData.length} 条记录`);
-      await this.updateInstance({ totalCount: feishuData.length });
+      const executionData = this.firstRecordOnly ? [feishuData[0]] : feishuData;
 
-      // 步骤 2: 导入数据到金蝶
-      const { formId, dataTemplate } = this.task.kingdeeConfig;
+      if (this.firstRecordOnly) {
+        console.log(`[${this.instance.id}] 测试模式：仅执行第一条记录`);
+      } else {
+        console.log(`[${this.instance.id}] 从飞书获取到 ${feishuData.length} 条记录`);
+      }
+
+      await this.updateInstance({ totalCount: executionData.length });
+
+      // 濮濄儵顎?2: 瀵煎叆鏁版嵁鍒伴噾铦?
+      const { formId } = this.task.kingdeeConfig;
       if (!formId) {
         throw new Error('金蝶表单 ID 未配置');
       }
 
       let successCount = 0;
       let errorCount = 0;
-      const total = feishuData.length;
+      const total = executionData.length;
 
-      // 解析模板
-      let parsedTemplate = null;
-      let templateParseFailed = false;
-      if (dataTemplate) {
-        try {
-          parsedTemplate = JSON.parse(dataTemplate);
-        } catch {
-          templateParseFailed = true;
-        }
-      }
+      // Parse template once and reuse while processing records.
+      const templateContext = this.createTemplateContext();
 
       // 并发处理
       const CONCURRENCY_LIMIT = 3;
-      const queue = [...feishuData];
+      const queue = [...executionData];
       const executing = [];
 
       const processItem = async (item, index) => {
-        if (this.isStopped) return;
+        if (this.isStopped || this.isStopping) return;
 
         const recordId = item.record_id;
         const fields = item.fields || {};
@@ -793,77 +1258,50 @@ export class TaskExecutor {
         let writeBackResult = null;
 
         try {
-          const formattedData = this.formatDataForKingdee(fields);
-          finalData = formattedData;
+          const payload = this.buildPayloadFromFields(fields, templateContext);
+          finalData = payload.finalData;
 
-          if (parsedTemplate) {
-            const templateWithValues = this.replacePlaceholders(parsedTemplate, formattedData);
-            finalData = { ...templateWithValues, ...formattedData };
-          } else if (templateParseFailed && dataTemplate) {
-            let templateWithValues = dataTemplate;
-            for (const [key, value] of Object.entries(formattedData)) {
-              const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
-              let stringValue = '';
-              if (typeof value === 'number' || typeof value === 'boolean') {
-                stringValue = String(value);
-              } else if (typeof value === 'object' && value !== null) {
-                stringValue = value.text || value.value || String(value);
-              } else {
-                stringValue = String(value ?? '');
-              }
-
-              const hasQuotes = templateWithValues.match(new RegExp(`"\\{\\{${key}\\}\\}"`));
-
-              if (typeof value === 'number' || typeof value === 'boolean') {
-                templateWithValues = templateWithValues.replace(placeholder, stringValue);
-              } else if (hasQuotes) {
-                const escaped = JSON.stringify(stringValue);
-                templateWithValues = templateWithValues.replace(placeholder, escaped.slice(1, -1));
-              } else {
-                templateWithValues = templateWithValues.replace(placeholder, JSON.stringify(stringValue));
-              }
-            }
-
-            try {
-              finalData = JSON.parse(templateWithValues);
-              if (!finalData.Model) {
-                finalData = { Model: { ...formattedData } };
-              }
-            } catch {
-              finalData = { Model: { ...formattedData } };
-            }
+          const unresolvedVariables = payload.unresolvedVariables;
+          if (unresolvedVariables.length > 0) {
+            const unresolvedError = new Error(this.buildUnresolvedPlaceholderError(unresolvedVariables, fields));
+            unresolvedError.responseData = {
+              unresolvedVariables,
+              recordId,
+            };
+            throw unresolvedError;
           }
 
           const result = await this.kingdeeService.saveData(formId, finalData);
           successCount++;
           writeBackResult = await this.handleWriteBack(recordId, 'success', '同步成功', result);
 
-          // 只保存第一条记录的日志
+          // 閸欘亙绻氱€涙顑囨稉鈧弶陇顔囪ぐ鏇犳畱閺冦儱绻?
           await this.saveWebApiLog({
             recordId,
-            feishuData: fields,
-            requestData: finalData,
-            responseData: result,
-            writeBackData: writeBackResult || {},
+            feishuData: normalizeTextValue(fields),
+            requestData: normalizeTextValue(finalData),
+            responseData: normalizeTextValue(result),
+            writeBackData: normalizeTextValue(writeBackResult || {}),
             success: true,
           });
 
         } catch (err) {
           errorCount++;
-          writeBackResult = await this.handleWriteBack(recordId, 'error', err.message, err.responseData);
+          const normalizedErrorMessage = normalizeUserFacingText(err.message);
+          writeBackResult = await this.handleWriteBack(recordId, 'error', normalizedErrorMessage, err.responseData);
 
-          // 只保存第一条记录的日志
+          // 閸欘亙绻氱€涙顑囨稉鈧弶陇顔囪ぐ鏇犳畱閺冦儱绻?
           await this.saveWebApiLog({
             recordId,
-            feishuData: fields,
-            requestData: finalData || {},
-            responseData: err.responseData || {},
-            writeBackData: writeBackResult || {},
+            feishuData: normalizeTextValue(fields),
+            requestData: normalizeTextValue(finalData || {}),
+            responseData: normalizeTextValue(err.responseData || {}),
+            writeBackData: normalizeTextValue(writeBackResult || {}),
             success: false,
-            errorMessage: err.message,
+            errorMessage: normalizeUserFacingText(err.message),
           });
 
-          console.error(`[${this.instance.id}] 记录 ${recordId} 导入失败: ${err.message}`);
+          console.error(`[${this.instance.id}] 记录 ${recordId} 导入失败: ${normalizeUserFacingText(err.message)}`);
         }
 
         const processedCount = successCount + errorCount;
@@ -875,13 +1313,13 @@ export class TaskExecutor {
         });
       };
 
-      // 保存正在执行的 Promise 引用，用于安全停止
+      // 娣囨繂鐡ㄥ锝呮躬閹笛嗩攽閻?Promise 瀵洜鏁ら敍宀€鏁ゆ禍搴＄暔閸忋劌浠犲?
       this.executingPromises = executing;
 
       while (queue.length > 0 || executing.length > 0) {
-        // 如果请求停止，不再从队列取新任务，但等待当前任务完成
+        // 婵″倹鐏夌拠閿嬬湴閸嬫粍顒涢敍灞肩瑝閸愬秳绮犻梼鐔峰灙閸欐牗鏌婃禒璇插閿涘奔绲剧粵澶婄窡瑜版挸澧犳禒璇插鐎瑰本鍨?
         if (this.isStopping) {
-          console.log(`[${this.instance.id}] 正在安全停止，等待 ${executing.length} 个任务完成...`);
+          console.log(`[${this.instance.id}] 濮濓絽婀€瑰鍙忛崑婊勵剾閿涘瞼鐡戝?${executing.length} 娑擃亙鎹㈤崝鈥崇暚閹?..`);
           // 不再取新任务，等待当前执行的任务完成
           if (executing.length > 0) {
             await Promise.all(executing);
@@ -890,13 +1328,13 @@ export class TaskExecutor {
         }
 
         if (this.isStopped) {
-          console.log(`[${this.instance.id}] 任务已被强制取消`);
+          console.log(`[${this.instance.id}] 娴犺濮熷鑼额潶瀵搫鍩楅崣鏍ㄧХ`);
           break;
         }
 
         while (executing.length < CONCURRENCY_LIMIT && queue.length > 0) {
           const item = queue.shift();
-          const index = feishuData.length - queue.length;
+          const index = executionData.length - queue.length;
           const promise = processItem(item, index).then(() => {
             executing.splice(executing.indexOf(promise), 1);
           });
@@ -912,7 +1350,7 @@ export class TaskExecutor {
         await Promise.all(executing);
       }
 
-      // 步骤 3: 更新任务状态
+      // 濮濄儵顎?3: 閺囧瓨鏌婃禒璇插閻樿埖鈧?
       let finalStatus;
       if (this.isStopped || this.isStopping) {
         finalStatus = TaskStatus.ERROR;
@@ -924,75 +1362,67 @@ export class TaskExecutor {
         finalStatus = TaskStatus.WARNING;
       }
 
+      const finalProcessedCount = successCount + errorCount;
+      const finalProgress = total > 0 ? Math.round((finalProcessedCount / total) * 100) : 100;
+
       await this.updateInstance({
         status: finalStatus,
         endTime: new Date().toISOString(),
-        progress: 100,
+        progress: finalProgress,
         successCount,
         errorCount,
+        isStopping: false,
       });
 
       console.log(`[${this.instance.id}] 任务执行完成: 成功 ${successCount} 条, 失败 ${errorCount} 条`);
 
     } catch (err) {
-      console.error(`[${this.instance.id}] 任务执行异常: ${err.message}`);
+      console.error(`[${this.instance.id}] 娴犺濮熼幍褑顢戝傚父: ${err.message}`);
       await this.updateInstance({
         status: TaskStatus.ERROR,
         endTime: new Date().toISOString(),
+        isStopping: false,
       });
       throw err;
     } finally {
       this.isRunning = false;
+      if (this.isStopping) {
+        this.isStopping = false;
+      }
     }
   }
 
-  // 停止任务（安全停止：等待当前正在执行的记录完成）
+  // 閸嬫粍顒涙禒璇插閿涘牆鐣ㄩ崗銊ヤ粻濮濐澁绱扮粵澶婄窡瑜版挸澧犲锝呮躬閹笛嗩攽閻ㄥ嫯顔囪ぐ鏇炵暚閹存劧绱?
+  getRuntimeStatus() {
+    return {
+      isRunning: this.isRunning,
+      isStopping: this.isStopping,
+      isStopped: this.isStopped,
+    };
+  }
+
   stop() {
     if (this.isStopping || this.isStopped) {
-      return; // 已经在停止中或已停止
+      return;
     }
 
-    // 设置安全停止标志
     this.isStopping = true;
-    console.log(`[${this.instance.id}] 请求安全停止，等待当前任务完成...`);
+    this.instance.status = TaskStatus.PAUSED;
+    this.instance.isStopping = true;
+    this.instance.stopRequestedAt = new Date().toISOString();
+    this.instance.endTime = null;
 
-    // 如果有正在执行的任务，等待它们完成
-    if (this.executingPromises && this.executingPromises.length > 0) {
-      console.log(`[${this.instance.id}] 等待 ${this.executingPromises.length} 个正在执行的任务完成...`);
+    console.log(`[${this.instance.id}] 请求安全停止，将在当前并发记录完成后结束`);
 
-      // 异步等待正在执行的任务完成
-      Promise.all(this.executingPromises).then(() => {
-        console.log(`[${this.instance.id}] 所有任务已完成，任务停止`);
-        this.isStopped = true;
-        this.instance.status = TaskStatus.ERROR;
-        this.instance.endTime = new Date().toISOString();
-        if (this.updateInstanceCallback) {
-          this.updateInstanceCallback(this.instance).catch(err => {
-            console.error(`[${this.instance.id}] 更新实例状态失败:`, err.message);
-          });
-        }
-      }).catch(err => {
-        console.error(`[${this.instance.id}] 等待任务完成时出错:`, err.message);
-        this.isStopped = true;
-        this.instance.status = TaskStatus.ERROR;
-        this.instance.endTime = new Date().toISOString();
+    if (this.updateInstanceCallback) {
+      this.updateInstanceCallback(this.instance).catch(err => {
+        console.error(`[${this.instance.id}] 閺囧瓨鏌婇崑婊勵剾娑擃厾濮搁幀浣搞亼鐠?`, err.message);
       });
-    } else {
-      // 没有正在执行的任务，直接停止
-      this.isStopped = true;
-      this.instance.status = TaskStatus.ERROR;
-      this.instance.endTime = new Date().toISOString();
-      if (this.updateInstanceCallback) {
-        this.updateInstanceCallback(this.instance).catch(err => {
-          console.error(`[${this.instance.id}] 更新实例状态失败:`, err.message);
-        });
-      }
-      console.log(`[${this.instance.id}] 任务已停止`);
     }
   }
 }
 
-// 导出任务管理函数
+// 瀵煎嚭浠诲姟绠＄悊鍑芥暟
 export function getRunningTasks() {
   return runningTasks;
 }
@@ -1008,3 +1438,7 @@ export function removeRunningTask(instanceId) {
 export function getRunningTask(instanceId) {
   return runningTasks.get(instanceId);
 }
+
+
+
+

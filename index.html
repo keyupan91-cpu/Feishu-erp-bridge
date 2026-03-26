@@ -1,63 +1,64 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/logo.svg" />
 
-    <!-- 核心 viewport 设置 - 响应式基础 -->
+    <!-- 鏍稿績 viewport 璁剧疆 - 鍝嶅簲寮忓熀纭€ -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
-    <!-- 禁止 iOS 自动缩放 -->
+    <!-- 绂佹 iOS 鑷姩缂╂斁 -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui" />
 
-    <!-- 禁止 iOS 识别数字为电话号码 -->
+    <!-- 绂佹 iOS 璇嗗埆鏁板瓧涓虹數璇濆彿鐮?-->
     <meta name="format-detection" content="telephone=no" />
 
-    <!-- PWA 支持 -->
+    <!-- PWA 鏀寔 -->
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="金蝶数据传输" />
 
-    <!-- 全屏显示支持 -->
+    <!-- 鍏ㄥ睆鏄剧ず鏀寔 -->
     <meta name="full-screen" content="yes" />
     <meta name="x5-fullscreen" content="true" />
     <meta name="browsermode" content="application" />
     <meta name="x5-page-mode" content="app" />
 
-    <!-- 禁止缓存 -->
+    <!-- 绂佹缂撳瓨 -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
 
     <title>金蝶数据传输平台</title>
 
-    <!-- 主题色 -->
-    <meta name="theme-color" content="#4A90E2" />
+    <!-- 涓婚鑹?-->
+    <meta name="theme-color" content="#6f9269" />
 
-    <!-- SEO 优化 -->
-    <meta name="description" content="金蝶数据传输平台 - 实现飞书到金蝶的数据自动同步" />
-    <meta name="keywords" content="金蝶，飞书，数据同步，ERP，API" />
+    <!-- SEO 浼樺寲 -->
+    <meta name="description" content="閲戣澏鏁版嵁浼犺緭骞冲彴 - 瀹炵幇椋炰功鍒伴噾铦剁殑鏁版嵁鑷姩鍚屾" />
+    <meta name="keywords" content="閲戣澏锛岄涔︼紝鏁版嵁鍚屾锛孍RP锛孉PI" />
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
 
-    <!-- 性能优化：预连接关键资源 -->
+    <!-- 鎬ц兘浼樺寲锛氶杩炴帴鍏抽敭璧勬簮 -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 
-    <!-- 添加触摸滚动优化脚本 -->
+    <!-- 娣诲姞瑙︽懜婊氬姩浼樺寲鑴氭湰 -->
     <script>
-      // 禁止双击放大
+      // 绂佹鍙屽嚮鏀惧ぇ
       document.addEventListener('dblclick', function(event) {
         event.preventDefault();
       }, { passive: false });
 
-      // 禁止长按菜单
+      // 绂佹闀挎寜鑿滃崟
       document.addEventListener('contextmenu', function(event) {
         event.preventDefault();
       }, { passive: false });
     </script>
   </body>
 </html>
+

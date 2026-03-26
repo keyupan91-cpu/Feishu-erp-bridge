@@ -22,6 +22,15 @@ export interface TaskVerificationStatus {
 // 字段处理类型
 export type FieldProcessType = 'auto' | 'text' | 'number' | 'date' | 'datetime' | 'timestamp' | 'select' | 'multiselect' | 'checkbox' | 'person' | 'phone';
 
+export interface FeishuFieldMeta {
+  fieldId: string;
+  fieldName: string;
+  fieldType: number;
+  uiType?: string;
+  isPrimary?: boolean;
+  property?: any;
+}
+
 // 飞书字段参数
 export interface FeishuFieldParam {
   id: string;
@@ -31,6 +40,8 @@ export interface FeishuFieldParam {
   decimalPlaces?: number; // 小数位数（数字类型，默认 2）
   dateFormat?: 'YYYY-MM-DD' | 'YYYY/MM/DD' | 'YYYYMMDD' | 'timestamp'; // 日期格式（日期类型）
   sourceFieldType?: number; // 飞书字段类型编码（自动填充，如 1=文本，2=数字，5=日期）
+  sourceUiType?: string; // 飞书字段 ui_type
+  sourceFieldId?: string; // 飞书字段 id
 }
 
 // 筛选条件
@@ -126,10 +137,12 @@ export interface TaskInstance {
   status: TaskStatus;
   startTime?: string;
   endTime?: string;
-  logs: [];
-  webApiLogs: []; // 日志已移除，存储在 IndexedDB 中 // WebAPI调用日志
+  logs: any[];
+  webApiLogs: any[]; // 日志已移除，存储在 IndexedDB 中 // WebAPI调用日志
   progress: number;
   totalCount?: number;
   successCount?: number;
   errorCount?: number;
+  isStopping?: boolean;
+  stopRequestedAt?: string | null;
 }

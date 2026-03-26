@@ -1,8 +1,9 @@
-// API 服务 - 与后端服务器通信
+﻿// API 服务 - 涓庡悗绔湇鍔″櫒閫氫俊
 import type { TaskConfig, TaskInstance } from '../types';
 
-// 使用相对路径，通过 Vite 代理访问后端
+// 浣跨敤鐩稿璺緞锛岄€氳繃 Vite 浠ｇ悊璁块棶鍚庣
 const API_BASE_URL = '/api';
+const REQUEST_TIMEOUT_MS = 20000;
 
 // 存储 token
 let authToken: string | null = localStorage.getItem('auth_token');
@@ -35,35 +36,55 @@ async function request<T>(url: string, options: RequestInit = {}): Promise<T> {
     headers['Authorization'] = `Bearer ${authToken}`;
   }
 
-  try {
-    const response = await fetch(`${API_BASE_URL}${url}`, {
-      ...options,
-      headers,
-    });
+  const method = (options.method || 'GET').toUpperCase();
+  const maxRetries = method === 'GET' ? 1 : 0;
+  let lastError: Error | null = null;
 
-    let data: any;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
     try {
-      data = await response.json();
-    } catch (e) {
-      data = {};
-    }
+      const response = await fetch(`${API_BASE_URL}${url}`, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
 
-    if (!response.ok) {
-      throw new Error(data.error || `请求失败：${response.status}`);
-    }
+      let data: any;
+      try {
+        data = await response.json();
+      } catch (_e) {
+        data = {};
+      }
 
-    return data;
-  } catch (error: any) {
-    if (error.message === 'Failed to fetch') {
-      throw new Error('无法连接到服务器，请确保后端服务已启动');
+      if (!response.ok) {
+        throw new Error(data.error || `请求失败，状态码: ${response.status}`);
+      }
+
+      return data;
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        lastError = new Error('请求超时，请稍后重试');
+      } else if (error.message === 'Failed to fetch') {
+        lastError = new Error('无法连接到服务器，请确认后端服务已启动');
+      } else {
+        lastError = error;
+      }
+
+      if (attempt < maxRetries) {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+        continue;
+      }
+    } finally {
+      clearTimeout(timeoutId);
     }
-    throw error;
   }
-}
 
-// 账户相关 API
+  throw lastError || new Error('请求失败');
+}
 export const authApi = {
-  // 注册
+  // 娉ㄥ唽
   register: async (username: string, password: string) => {
     const result = await request<{
       success: boolean;
@@ -143,12 +164,12 @@ export const dataApi = {
     window.URL.revokeObjectURL(url);
   },
 
-  // 导入数据 - 只导入任务配置
+  // 导入数据 - 鍙鍏ヤ换鍔￠厤缃?
   importData: async (file: File) => {
     const text = await file.text();
     const data = JSON.parse(text);
 
-    // 只发送任务配置，不发送执行记录
+    // 鍙彂閫佷换鍔￠厤缃紝涓嶅彂閫佹墽琛岃褰?
     return request<{
       success: boolean;
       message: string;
@@ -162,9 +183,9 @@ export const dataApi = {
   },
 };
 
-// 任务管理 API
+// 浠诲姟绠＄悊 API
 export const taskApi = {
-  // 删除任务及其所有执行记录
+  // 鍒犻櫎浠诲姟鍙婂叾鎵€鏈夋墽琛岃褰?
   deleteTask: async (taskId: string) => {
     return request<{ success: boolean; message: string }>(`/tasks/${taskId}`, {
       method: 'DELETE',
@@ -172,9 +193,9 @@ export const taskApi = {
   },
 };
 
-// 执行记录管理 API
+// 鎵ц璁板綍绠＄悊 API
 export const instanceApi = {
-  // 删除单个执行记录
+  // 鍒犻櫎鍗曚釜鎵ц记录
   deleteInstance: async (instanceId: string) => {
     return request<{ success: boolean; message: string }>(`/instances/${instanceId}`, {
       method: 'DELETE',
@@ -182,27 +203,79 @@ export const instanceApi = {
   },
 };
 
-// 任务执行 API
+// 浠诲姟鎵ц API
 export const taskExecutionApi = {
-  // 启动任务执行
-  executeTask: async (taskId: string) => {
+  // 预览第一条匹配记录将发送到金蝶的请求数据（不发送）
+  previewRequestData: async (taskId: string) => {
+    type PreviewResult = {
+      success: boolean;
+      message: string;
+      preview: {
+        formId: string;
+        recordId: string;
+        filterMatchedCount: number;
+        feishuFields: Record<string, any>;
+        formattedData: Record<string, any>;
+        templateReplacementData: Record<string, any>;
+        requestData: Record<string, any>;
+        unresolvedVariables: string[];
+      };
+    };
+
+    const candidatePaths = [
+      `/tasks/${taskId}/preview-request`,
+      `/tasks/${taskId}/request-preview`,
+      `/tasks/${taskId}/preview`,
+    ];
+
+    let lastError: any = null;
+    for (const path of candidatePaths) {
+      try {
+        return await request<PreviewResult>(path, {
+          method: 'POST',
+          body: JSON.stringify({}),
+        });
+      } catch (error: any) {
+        const errorMessage = String(error?.message || '');
+        const isNotFound = errorMessage.includes('404') || errorMessage.includes('Cannot POST');
+        const isTaskMissing = errorMessage.includes('任务不存在');
+
+        if (isTaskMissing) {
+          throw error;
+        }
+
+        lastError = error;
+        if (!isNotFound) {
+          throw error;
+        }
+      }
+    }
+
+    throw lastError || new Error('预览请求数据失败');
+  },
+
+  // 鍚姩浠诲姟鎵ц
+  executeTask: async (taskId: string, options?: { firstRecordOnly?: boolean }) => {
     return request<{
       success: boolean;
       instanceId: string;
       message: string;
     }>(`/tasks/${taskId}/execute`, {
       method: 'POST',
+      body: JSON.stringify({
+        firstRecordOnly: options?.firstRecordOnly === true,
+      }),
     });
   },
 
-  // 停止任务执行
+  // 鍋滄浠诲姟鎵ц
   stopTask: async (instanceId: string) => {
     return request<{ success: boolean; message: string }>(`/tasks/${instanceId}/stop`, {
       method: 'POST',
     });
   },
 
-  // 获取任务状态
+  // 鑾峰彇浠诲姟鐘舵€?
   getTaskStatus: async (instanceId: string) => {
     return request<{
       success: boolean;
@@ -212,15 +285,18 @@ export const taskExecutionApi = {
       successCount: number;
       errorCount: number;
       isRunning: boolean;
+      isStopping?: boolean;
+      isStopped?: boolean;
       startTime?: string;
       endTime?: string;
+      stopRequestedAt?: string | null;
     }>(`/tasks/${instanceId}/status`);
   },
 };
 
-// 日志 API
+// 鏃ュ織 API
 export const logsApi = {
-  // 保存 WebAPI 日志
+  // 保存 WebAPI 鏃ュ織
   saveWebApiLog: async (data: {
     instanceId: string;
     recordId: string;
@@ -237,7 +313,7 @@ export const logsApi = {
     });
   },
 
-  // 获取日志
+  // 鑾峰彇鏃ュ織
   getLog: async (instanceId: string) => {
     return request<{
       success: boolean;
@@ -256,7 +332,7 @@ export const logsApi = {
     }>(`/logs/${instanceId}`);
   },
 
-  // 删除日志
+  // 鍒犻櫎鏃ュ織
   deleteLog: async (instanceId: string) => {
     return request<{ success: boolean; message: string }>(`/logs/${instanceId}`, {
       method: 'DELETE',
@@ -264,16 +340,16 @@ export const logsApi = {
   },
 };
 
-// 账户管理 API
+// 璐︽埛绠＄悊 API
 export const accountApi = {
-  // 删除账户
+  // 鍒犻櫎璐︽埛
   deleteAccount: async () => {
     return request<{ success: boolean; message: string }>('/account', {
       method: 'DELETE',
     });
   },
 
-  // 获取当前账户信息
+  // 鑾峰彇褰撳墠璐︽埛淇℃伅
   getProfile: async () => {
     return request<{
       account: {
@@ -289,3 +365,5 @@ export const accountApi = {
     }>('/account/profile');
   },
 };
+
+

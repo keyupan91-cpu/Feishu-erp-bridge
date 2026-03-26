@@ -21,5 +21,3 @@ export { MobilePageHeader, MobileTaskCard as MobileTaskCardSimple } from './Mobi
 // PC端布局组件
 export { default as MainLayout } from './MainLayout';
 
-// 帮助文档页面
-export { default as HelpPage } from './HelpPage';

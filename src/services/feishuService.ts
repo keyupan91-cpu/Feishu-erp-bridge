@@ -496,8 +496,12 @@ class FeishuService {
         // 3. 提取字段名和字段类型
         const fields = response.data.data?.items || [];
         return fields.map((field: any) => ({
+          fieldId: field.field_id || field.fieldId || '',
           fieldName: field.field_name,
           fieldType: field.type || 'unknown',
+          uiType: field.ui_type,
+          isPrimary: field.is_primary,
+          property: field.property ?? null,
         }));
       } else {
         throw new Error(`获取字段列表失败：${response.data.msg} (code: ${response.data.code})`);

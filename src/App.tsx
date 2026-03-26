@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+﻿import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Tabs,
   Button,
@@ -10,7 +10,6 @@ import {
   Switch,
   Progress,
   Tag,
-  List,
   Typography,
   Badge,
   Tooltip,
@@ -24,6 +23,7 @@ import {
   Collapse,
   Spin,
 } from 'antd';
+import type { DragEvent } from 'react';
 import {
   PlusOutlined,
   EditOutlined,
@@ -42,7 +42,6 @@ import {
   LoginOutlined,
   FileSyncOutlined,
   ThunderboltOutlined,
-  ArrowLeftOutlined,
   ExportOutlined,
   ImportOutlined,
   LogoutOutlined,
@@ -50,21 +49,22 @@ import {
 
   ExperimentOutlined,
   SyncOutlined,
+  HolderOutlined,
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { TaskStatus } from './types';
-import type { TaskConfig, TaskInstance, WebAPILog } from './types';
+import type { TaskConfig, TaskInstance } from './types';
 import TaskConfigComponent from './components/TaskConfig';
 import WebAPIDebugger from './components/WebAPIDebugger';
 import AuthPage from './components/AuthPage';
-// MobileLayout 组件已导入，用于移动端适配
+// MobileLayout 缁勪欢宸插鍏ワ紝鐢ㄤ簬绉诲姩绔€傞厤
 import { useAccountStore } from './stores/accountStore';
 import FeishuService from './services/feishuService';
 import KingdeeService from './services/kingdeeService';
 import { taskExecutionApi } from './services/apiService';
-// 移动端优化导入
+// 绉诲姩绔紭鍖栧鍏?
 import { useResponsive } from './hooks/useResponsive';
-import { BottomNavBar, TopNavBar, MobileTaskCard, MobileTaskInstanceCard, MainLayout, HelpPage } from './components';
+import { BottomNavBar, TopNavBar, MobileTaskCard, MobileTaskInstanceCard, MainLayout } from './components';
 import './theme.css';
 
 const { Text } = Typography;
@@ -72,13 +72,10 @@ const { TabPane } = Tabs;
 const { TextArea } = Input;
 
 function App() {
-  // 响应式检测
+  // 鍝嶅簲寮忔娴?
   const { isMobile } = useResponsive();
 
-  // 登录状态
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  // 从 store 获取状态和操作
+  // 浠?store 鑾峰彇鐘舵€佸拰鎿嶄綔
   const {
     currentAccount,
     tasks,
@@ -91,27 +88,37 @@ function App() {
     deleteTask,
     copyTask,
     toggleTask,
+    reorderTasks,
     deleteTaskInstance,
-    startTask,
-    stopTask,
     loadFromServer,
     updateTaskInstanceStatus,
+    isInitialized,
+    initialize,
   } = useAccountStore();
 
-  // 本地状态
+  const hasInitializedRef = useRef(false);
+
+  // 鏈湴鐘舵€?
   const [activeTab, setActiveTab] = useState('tasks');
+
+  // 应用启动时先恢复登录态，避免刷新后闪到登录页
+  useEffect(() => {
+    if (hasInitializedRef.current) {
+      return;
+    }
+    hasInitializedRef.current = true;
+
+    initialize().catch((error) => {
+      console.error('初始化登录态失败:', error);
+    });
+  }, [initialize]);
 
   // Tab切换处理
   const handleTabChange = (tab: string) => {
-    if (tab === 'help') {
-      setShowHelpPage(true);
-    } else {
-      setActiveTab(tab);
-      setShowHelpPage(false);
-    }
+    setActiveTab(tab);
   };
 
-  // 当切换到监控标签页时，加载所有实例的最新日志
+  // 褰撳垏鎹㈠埌鐩戞帶鏍囩椤垫椂锛屽姞杞芥墍鏈夊疄渚嬬殑鏈€鏂版棩蹇?
   useEffect(() => {
     if (activeTab === 'monitoring') {
       loadAllInstanceLogs();
@@ -127,69 +134,100 @@ function App() {
   const [testModalOpen, setTestModalOpen] = useState(false);
   const [testModalType, setTestModalType] = useState<'feishu' | 'kingdee' | 'sync' | 'verification'>('feishu');
   const [testResult, setTestResult] = useState<any>(null);
-  const [verificationTestTaskId, setVerificationTestTaskId] = useState<string>(''); // 验证测试的任务 ID
+  const [verificationTestTaskId, setVerificationTestTaskId] = useState<string>(''); // 楠岃瘉娴嬭瘯鐨勪换鍔?ID
   const [showWebApiLogs, setShowWebApiLogs] = useState(false);
-  const [selectedWebApiLog, setSelectedWebApiLog] = useState<any>(null);
-  const [loadedTaskLogs, setLoadedTaskLogs] = useState<any[]>([]); // 从 IndexedDB 加载的任务日志
-  const [loadedWebApiLogs, setLoadedWebApiLogs] = useState<any[]>([]); // 从 IndexedDB 加载的 WebAPI 日志
-  const [loadedFullTaskLogs, setLoadedFullTaskLogs] = useState<any[]>([]); // 从 IndexedDB 加载的完整任务日志（用于详情弹窗）
+  const [loadedWebApiLogs, setLoadedWebApiLogs] = useState<any[]>([]); // 浠?IndexedDB 鍔犺浇鐨?WebAPI 鏃ュ織
   const [logsLoading, setLogsLoading] = useState(false);
   const [instanceLatestLogs, setInstanceLatestLogs] = useState<Map<string, { timestamp: string; message: string; level: string }>>(new Map());
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+  const dragTaskIdRef = useRef<string | null>(null);
 
-  // 帮助页面状态
-  const [showHelpPage, setShowHelpPage] = useState(false);
+  // 杞瀹氭椂鍣ㄥ紩鐢?
+  const pollingIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
+  const pollingRequestingRef = useRef<Map<string, boolean>>(new Map());
 
-  // 轮询定时器引用
-  const pollingIntervalsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
-
-  // 清理所有轮询
+  // 娓呯悊鎵€鏈夎疆璇?
   const clearAllPolling = useCallback(() => {
     pollingIntervalsRef.current.forEach((intervalId) => {
       clearInterval(intervalId);
     });
     pollingIntervalsRef.current.clear();
+    pollingRequestingRef.current.clear();
   }, []);
 
-  // 开始轮询任务状态
+  // 寮€濮嬭疆璇换鍔＄姸鎬?
   const startStatusPolling = useCallback((instanceId: string) => {
-    // 如果已有轮询在运行，先清除
+    // 濡傛灉宸叉湁杞鍦ㄨ繍琛岋紝鍏堟竻闄?
     const existingInterval = pollingIntervalsRef.current.get(instanceId);
     if (existingInterval) {
       clearInterval(existingInterval);
     }
 
     const intervalId = setInterval(async () => {
+      if (pollingRequestingRef.current.get(instanceId)) {
+        return;
+      }
+      pollingRequestingRef.current.set(instanceId, true);
+
       try {
         const status = await taskExecutionApi.getTaskStatus(instanceId);
 
-        // 更新实例状态
+        // 鏇存柊瀹炰緥鐘舵€?
         updateTaskInstanceStatus(instanceId, {
-          status: status.status as any,
+          status: status.isStopping ? TaskStatus.PAUSED : (status.status as any),
           progress: status.progress,
           totalCount: status.totalCount,
           successCount: status.successCount,
           errorCount: status.errorCount,
+          isStopping: status.isStopping === true,
+          startTime: status.startTime,
+          endTime: status.endTime,
+          stopRequestedAt: status.stopRequestedAt ?? null,
         });
 
-        // 任务完成时停止轮询
+        // 浠诲姟瀹屾垚鏃跺仠姝㈣疆璇?
         if (!status.isRunning) {
           const interval = pollingIntervalsRef.current.get(instanceId);
           if (interval) {
             clearInterval(interval);
             pollingIntervalsRef.current.delete(instanceId);
           }
-          // 最终刷新数据以获取完整信息
+          pollingRequestingRef.current.delete(instanceId);
+          // 鏈€缁堝埛鏂版暟鎹互鑾峰彇瀹屾暣淇℃伅
           await loadFromServer();
         }
       } catch (error) {
-        console.error('轮询任务状态失败:', error);
+        console.error('轮询任务状态失败', error);
+      } finally {
+        pollingRequestingRef.current.set(instanceId, false);
       }
-    }, 2000); // 每2秒轮询一次
+    }, 2000); // 姣?绉掕疆璇竴娆?
 
     pollingIntervalsRef.current.set(instanceId, intervalId);
   }, [updateTaskInstanceStatus, loadFromServer]);
 
-  // 组件卸载时清理所有轮询
+
+  // 页面刷新后自动续轮询运行中/停止中的任务
+  useEffect(() => {
+    const activeStatuses = new Set<TaskStatus>([TaskStatus.RUNNING, TaskStatus.PAUSED]);
+
+    taskInstances.forEach((instance) => {
+      if (activeStatuses.has(instance.status) && !pollingIntervalsRef.current.has(instance.id)) {
+        startStatusPolling(instance.id);
+      }
+    });
+
+    pollingIntervalsRef.current.forEach((intervalId, instanceId) => {
+      const instance = taskInstances.find((item) => item.id === instanceId);
+      if (!instance || !activeStatuses.has(instance.status)) {
+        clearInterval(intervalId);
+        pollingIntervalsRef.current.delete(instanceId);
+        pollingRequestingRef.current.delete(instanceId);
+      }
+    });
+  }, [taskInstances, startStatusPolling]);
+
+  // 缁勪欢鍗歌浇鏃舵竻鐞嗘墍鏈夎疆璇?
   useEffect(() => {
     return () => {
       clearAllPolling();
@@ -198,7 +236,6 @@ function App() {
 
   // 处理登录成功
   const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
     const account = useAccountStore.getState().currentAccount;
     message.success(`欢迎回来，${account?.username}`);
     console.log('登录成功，当前账户:', account);
@@ -211,7 +248,6 @@ function App() {
       content: '登出后将无法查看当前账户的数据，是否继续？',
       onOk: () => {
         logout();
-        setIsAuthenticated(false);
         message.info('已登出');
       },
     });
@@ -302,9 +338,24 @@ function App() {
     setIsModalOpen(true);
   };
 
+  const cloneTaskConfig = (task: TaskConfig): TaskConfig => ({
+    ...task,
+    feishuConfig: {
+      ...task.feishuConfig,
+      fieldParams: (task.feishuConfig.fieldParams || []).map((param) => ({ ...param })),
+      filterConditions: (task.feishuConfig.filterConditions || []).map((condition) => ({ ...condition })),
+      writeBackFields: (task.feishuConfig.writeBackFields || []).map((field) => ({ ...field })),
+    },
+    kingdeeConfig: {
+      ...task.kingdeeConfig,
+      loginParams: { ...task.kingdeeConfig.loginParams },
+    },
+    verificationStatus: task.verificationStatus ? { ...task.verificationStatus } : undefined,
+  });
+
   // 处理配置任务
   const handleConfigTask = (task: TaskConfig) => {
-    setSelectedTask(task);
+    setSelectedTask(cloneTaskConfig(task));
     setIsConfigModalOpen(true);
   };
 
@@ -316,7 +367,7 @@ function App() {
     }
   };
 
-  // 处理开始任务
+  // 澶勭悊寮€濮嬩换鍔?
   const handleStartTask = async (taskId: string) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
@@ -336,7 +387,7 @@ function App() {
   };
 
   // 执行自动验证
-  const executeAutoVerification = async (taskId: string) => {
+  const executeAutoVerification = async (taskId: string, firstRecordOnly = false) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
@@ -452,7 +503,7 @@ function App() {
 
       verificationResults.kingdeeLogin = { success: true, error: '' };
 
-      // 全部验证通过，关闭进度弹窗
+      // 鍏ㄩ儴楠岃瘉閫氳繃锛屽叧闂繘搴﹀脊绐?
       verificationModal.destroy();
 
       // 显示验证通过确认弹窗
@@ -460,7 +511,7 @@ function App() {
         title: (
           <Space>
             <CheckCircleOutlined style={{ color: '#52C41A' }} />
-            <span>验证通过！</span>
+            <span>验证通过：</span>
           </Space>
         ),
         content: (
@@ -482,13 +533,13 @@ function App() {
         okText: '开始执行',
         cancelText: '取消',
         onOk: () => {
-          startTaskExecution(taskId);
+          startTaskExecution(taskId, firstRecordOnly);
         },
       });
     } catch (error: any) {
       verificationModal.destroy();
 
-      // 验证失败，显示错误信息
+      // 楠岃瘉澶辫触锛屾樉绀洪敊璇俊鎭?
       Modal.error({
         title: <Space><ExclamationCircleOutlined style={{ color: '#FF4D4F' }} /><span>验证失败</span></Space>,
         content: (
@@ -518,7 +569,7 @@ function App() {
                     {verificationResults.feishuLogin.success && verificationResults.feishuQuery.success ? (
                       <>
                         <CheckCircleOutlined style={{ color: '#52C41A', marginRight: 8 }} />
-                        <span>数据查询：失败 - {error.message}</span>
+                        <span>数据查询：正常</span>
                       </>
                     ) : (
                       <>
@@ -570,18 +621,18 @@ function App() {
   };
 
   // 启动任务执行（内部函数）- 调用后端 API
-  const startTaskExecution = async (taskId: string) => {
+  const startTaskExecution = async (taskId: string, firstRecordOnly = false) => {
     const task = tasks.find((t) => t.id === taskId);
     if (!task) return;
 
     try {
       // 调用后端 API 启动任务
-      const result = await taskExecutionApi.executeTask(taskId);
+      const result = await taskExecutionApi.executeTask(taskId, { firstRecordOnly });
       if (result.success) {
         message.success('任务已开始执行');
         // 刷新任务实例列表
         await loadFromServer();
-        // 开始轮询任务状态
+        // 寮€濮嬭疆璇换鍔＄姸鎬?
         if (result.instanceId) {
           startStatusPolling(result.instanceId);
         }
@@ -595,14 +646,27 @@ function App() {
 
   // 处理停止任务 - 调用后端 API
   const handleStopTask = async (instanceId: string) => {
+    // 先做前端即时反馈，避免“点了停止还显示运行中”
+    updateTaskInstanceStatus(instanceId, {
+      status: TaskStatus.PAUSED,
+      isStopping: true,
+    });
+
+    if (!pollingIntervalsRef.current.has(instanceId)) {
+      startStatusPolling(instanceId);
+    }
+
     try {
       const result = await taskExecutionApi.stopTask(instanceId);
       if (result.success) {
-        message.success('任务已停止');
-        // 刷新任务实例列表
-        await loadFromServer();
+        message.success(result.message || '任务正在安全停止，请稍候');
       }
     } catch (error: any) {
+      // 停止失败时回滚为运行中，避免误导
+      updateTaskInstanceStatus(instanceId, {
+        status: TaskStatus.RUNNING,
+        isStopping: false,
+      });
       message.error(`停止任务失败：${error.message}`);
     }
   };
@@ -619,18 +683,14 @@ function App() {
     });
   };
 
-  // 加载日志 - 任务日志从 IndexedDB，WebAPI 日志从后端文件
+  // 鍔犺浇鏃ュ織 - 浠诲姟鏃ュ織浠?IndexedDB锛學ebAPI 鏃ュ織浠庡悗绔枃浠?
   const loadLogs = async (instanceId: string, loadFull = false) => {
+    void loadFull;
     setLogsLoading(true);
     try {
-      const { logStorage } = await import('./services/logStorage');
       const { logsApi } = await import('./services/apiService');
-      const limit = loadFull ? 1000 : 10; // 加载完整日志时最多 1000 条
 
-      // 任务日志从 IndexedDB 加载
-      const taskLogs = await logStorage.getTaskLogs(instanceId, { limit, reverse: true });
-
-      // WebAPI 日志从后端文件加载（只保存第一条记录）
+      // WebAPI 鏃ュ織浠庡悗绔枃浠跺姞杞斤紙鍙繚瀛樼涓€鏉¤褰曪級
       let webApiLogs: any[] = [];
       try {
         const result = await logsApi.getLog(instanceId);
@@ -641,11 +701,7 @@ function App() {
         // 日志不存在，忽略
       }
 
-      setLoadedTaskLogs(taskLogs.slice(0, 10)); // PC 端主界面只显示前 10 条
       setLoadedWebApiLogs(webApiLogs);
-      if (loadFull) {
-        setLoadedFullTaskLogs(taskLogs); // 完整日志用于详情弹窗
-      }
     } catch (error: any) {
       message.error(`加载日志失败：${error.message}`);
     } finally {
@@ -653,7 +709,7 @@ function App() {
     }
   };
 
-  // 加载所有实例的最新日志（用于移动端卡片显示）
+  // 鍔犺浇鎵€鏈夊疄渚嬬殑鏈€鏂版棩蹇楋紙鐢ㄤ簬绉诲姩绔崱鐗囨樉绀猴級
   const loadAllInstanceLogs = async () => {
     try {
       const { logStorage } = await import('./services/logStorage');
@@ -670,13 +726,13 @@ function App() {
             });
           }
         } catch (e) {
-          // 忽略单个实例的加载错误
+          // 蹇界暐鍗曚釜瀹炰緥鐨勫姞杞介敊璇?
         }
       }));
 
       setInstanceLatestLogs(logsMap);
     } catch (error) {
-      console.error('加载所有实例日志失败:', error);
+      console.error('加载所有实例日志失败', error);
     }
   };
 
@@ -684,6 +740,52 @@ function App() {
   const handleViewInstance = (instance: TaskInstance) => {
     setSelectedInstance(instance);
     loadLogs(instance.id, true); // 加载完整日志
+  };
+
+  const handleOpenInstanceFromTest = async (instanceId: string) => {
+    setActiveTab('monitoring');
+    await loadFromServer();
+    const latestInstances = useAccountStore.getState().taskInstances;
+    const targetInstance = latestInstances.find((item) => item.id === instanceId)
+      || taskInstances.find((item) => item.id === instanceId);
+
+    if (!targetInstance) {
+      message.warning('未找到对应任务实例，请在执行监控中手动查看');
+      return;
+    }
+
+    setSelectedInstance(targetInstance);
+    await loadLogs(targetInstance.id, true);
+  };
+
+  const normalizeDisplayText = (value: any): string => {
+    if (value === null || value === undefined) {
+      return '';
+    }
+    return String(value)
+      .replace(/淇濆瓨澶辫触/g, '保存失败')
+      .replace(/鍚屾鎴愬姛/g, '同步成功')
+      .replace(/鍚屾澶辫触/g, '同步失败')
+      .replace(/鏃犳硶鎻愬彇/g, '无法提取')
+      .replace(/鑾峰彇椋炰功浠ょ墝澶辫触/g, '获取飞书令牌失败')
+      .replace(/鑾峰彇鏁版嵁澶辫触/g, '获取数据失败')
+      .replace(/鑾峰彇椋炰功鏁版嵁澶辫触/g, '获取飞书数据失败')
+      .replace(/鍥炲啓鏁版嵁澶辫触/g, '回写数据失败');
+  };
+
+  const normalizeDisplayPayload = (value: any): any => {
+    if (typeof value === 'string') {
+      return normalizeDisplayText(value);
+    }
+    if (Array.isArray(value)) {
+      return value.map((item) => normalizeDisplayPayload(item));
+    }
+    if (value && typeof value === 'object') {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, inner]) => [key, normalizeDisplayPayload(inner)])
+      );
+    }
+    return value;
   };
 
   // 处理清空执行记录
@@ -716,14 +818,16 @@ function App() {
   };
 
   // 执行验证测试
-  const executeVerificationTest = async (testType: 'feishu-login' | 'feishu-field' | 'kingdee-login' | 'full-flow') => {
+  const executeVerificationTest = async (
+    testType: 'feishu-login' | 'feishu-field' | 'kingdee-login' | 'request-preview' | 'full-flow'
+  ) => {
     const task = tasks.find((t) => t.id === verificationTestTaskId);
     if (!task) {
       message.error('请选择一个任务');
       return;
     }
 
-    setTestResult({ loading: true, type: testType });
+    setTestResult({ loading: true, type: testType, title: '正在执行测试...' });
 
     try {
       let result: any;
@@ -745,10 +849,10 @@ function App() {
             '访问令牌': token.slice(0, 20) + '...',
           },
         };
-        // 更新验证状态
+        // 鏇存柊楠岃瘉鐘舵€?
         await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { feishuLoginTest: true });
       } else if (testType === 'feishu-field') {
-        // 飞书字段查询/筛选/回传测试
+        // 椋炰功瀛楁鏌ヨ/绛涢€?鍥炰紶娴嬭瘯
         if (!task.feishuConfig.tableId) {
           throw new Error('请先在任务配置中填写飞书表格 ID');
         }
@@ -759,7 +863,7 @@ function App() {
           task.feishuConfig.filterConditions,
           task.feishuConfig.writeBackFields
         );
-        // 更新验证状态
+        // 鏇存柊楠岃瘉鐘舵€?
         await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { feishuFieldTest: result.success });
       } else if (testType === 'kingdee-login') {
         // 金蝶登录测试
@@ -774,13 +878,45 @@ function App() {
           title: kingdeeResult.success ? '金蝶登录测试成功' : '金蝶登录测试失败',
           message: kingdeeResult.message,
           details: {
-            '服务器地址': task.kingdeeConfig.loginParams.baseUrl,
+            '鏈嶅姟鍣ㄥ湴鍧€': task.kingdeeConfig.loginParams.baseUrl,
             '用户名': task.kingdeeConfig.loginParams.username,
             '账套 ID': task.kingdeeConfig.loginParams.dbId || '-',
           },
         };
-        // 更新验证状态
+        // 鏇存柊楠岃瘉鐘舵€?
         await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { kingdeeLoginTest: kingdeeResult.success });
+      } else if (testType === 'request-preview') {
+        if (!task.feishuConfig.tableId) {
+          throw new Error('请先在任务配置中填写飞书表格 ID');
+        }
+        if (!task.kingdeeConfig.formId) {
+          throw new Error('请先在任务配置中填写金蝶表单 ID');
+        }
+
+        const previewResult = await taskExecutionApi.previewRequestData(task.id);
+        if (!previewResult.success || !previewResult.preview) {
+          throw new Error(previewResult.message || '生成请求数据预览失败');
+        }
+
+        const unresolvedVariables = previewResult.preview.unresolvedVariables || [];
+        const hasUnresolved = unresolvedVariables.length > 0;
+
+        result = {
+          success: !hasUnresolved,
+          type: 'request-preview',
+          title: hasUnresolved ? '传入数据预览完成（存在未替换变量）' : '传入数据预览完成',
+          message: hasUnresolved
+            ? `检测到未替换变量：${unresolvedVariables.join('，')}`
+            : '已生成将发送给金蝶的请求数据（未发送）',
+          details: {
+            '任务表单 ID': previewResult.preview.formId,
+            '记录 ID': previewResult.preview.recordId,
+            '筛选命中数': previewResult.preview.filterMatchedCount,
+            '未替换变量': hasUnresolved ? unresolvedVariables.join(', ') : '无',
+          },
+          requestData: previewResult.preview.requestData,
+          feishuFields: previewResult.preview.feishuFields,
+        };
       } else if (testType === 'full-flow') {
         // 完整流程测试
         if (!task.feishuConfig.tableId) {
@@ -789,32 +925,193 @@ function App() {
         if (!task.kingdeeConfig.formId) {
           throw new Error('请先在任务配置中填写金蝶表单 ID');
         }
-        const feishuService = new FeishuService(task.feishuConfig);
-        result = await feishuService.testFullFlow(
-          task.feishuConfig.tableId,
-          task.feishuConfig.fieldParams,
-          task.feishuConfig.filterConditions,
-          task.feishuConfig.writeBackFields
-        );
-        // 更新验证状态
-        await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { fullFlowTest: result.success });
+        // 绗洓椤规祴璇曠洿鎺ユ墽琛屸€滀粎绗竴鏉¤褰曗€濈殑瀹屾暣浠诲姟娴佺▼
+        const executeResult = await taskExecutionApi.executeTask(task.id, { firstRecordOnly: true });
+        if (!executeResult.success || !executeResult.instanceId) {
+          throw new Error(executeResult.message || '启动第一条记录测试任务失败');
+        }
+        startStatusPolling(executeResult.instanceId);
+
+        const startAt = Date.now();
+        const timeoutMs = 180000;
+        let statusResult: any = null;
+        let lastSnapshot = '';
+
+        const toStatusText = (status: string) => {
+          if (status === TaskStatus.RUNNING) return '运行中';
+          if (status === TaskStatus.PAUSED) return '停止中';
+          if (status === TaskStatus.SUCCESS) return '成功';
+          if (status === TaskStatus.ERROR) return '失败';
+          if (status === TaskStatus.WARNING) return '部分成功';
+          return status;
+        };
+
+        setTestResult({
+          loading: true,
+          success: true,
+          type: 'full-flow',
+          title: '第一条记录完整流程测试进行中',
+          message: `任务实例已启动：${executeResult.instanceId}`,
+          instanceId: executeResult.instanceId,
+          details: {
+            '任务实例ID': executeResult.instanceId,
+            '执行状态': '启动中',
+            '处理总数': 0,
+            '成功数量': 0,
+            '失败数量': 0,
+            '进度': '0%',
+          },
+        });
+
+        while (Date.now() - startAt < timeoutMs) {
+          statusResult = await taskExecutionApi.getTaskStatus(executeResult.instanceId);
+          const snapshot = [
+            statusResult.status,
+            statusResult.progress,
+            statusResult.totalCount,
+            statusResult.successCount,
+            statusResult.errorCount,
+            statusResult.isRunning,
+          ].join('|');
+
+          if (snapshot !== lastSnapshot) {
+            lastSnapshot = snapshot;
+            setTestResult({
+              loading: true,
+              success: true,
+              type: 'full-flow',
+              title: '第一条记录完整流程测试进行中',
+              message: `当前状态：${toStatusText(statusResult.status)}`,
+              instanceId: executeResult.instanceId,
+              details: {
+                '任务实例ID': executeResult.instanceId,
+                '执行状态': toStatusText(statusResult.status),
+                '处理总数': statusResult.totalCount ?? 0,
+                '成功数量': statusResult.successCount ?? 0,
+                '失败数量': statusResult.errorCount ?? 0,
+                '进度': `${statusResult.progress ?? 0}%`,
+              },
+            });
+          }
+
+          if (!statusResult.isRunning) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 1200));
+        }
+
+        if (!statusResult) {
+          throw new Error('未获取到测试任务状态');
+        }
+        if (statusResult.isRunning) {
+          throw new Error('第一条记录完整流程测试超时，请稍后在任务监控中查看结果');
+        }
+
+        const fullFlowSuccess =
+          statusResult.status === TaskStatus.SUCCESS &&
+          (statusResult.successCount ?? 0) > 0 &&
+          (statusResult.errorCount ?? 0) === 0;
+
+        result = {
+          success: fullFlowSuccess,
+          type: 'full-flow',
+          title: fullFlowSuccess ? '第一条记录完整流程测试成功' : '第一条记录完整流程测试失败',
+          message: fullFlowSuccess
+            ? '第一条记录已完成完整流程'
+            : `流程执行失败：状态=${statusResult.status}，成功=${statusResult.successCount ?? 0}，失败=${statusResult.errorCount ?? 0}`,
+          instanceId: executeResult.instanceId,
+          details: {
+            '任务实例ID': executeResult.instanceId,
+            '执行状态': statusResult.status,
+            '处理总数': statusResult.totalCount ?? 0,
+            '成功数量': statusResult.successCount ?? 0,
+            '失败数量': statusResult.errorCount ?? 0,
+            '进度': `${statusResult.progress ?? 0}%`,
+          },
+        };
+        // 鏇存柊楠岃瘉鐘舵€?
+        await useAccountStore.getState().updateVerificationStatus(verificationTestTaskId, { fullFlowTest: fullFlowSuccess });
       }
 
       setTestResult({ loading: false, ...result });
     } catch (error: any) {
+      let errorMessage = error.message;
+      if (testType === 'request-preview' && String(error?.message || '').includes('404')) {
+        errorMessage = '请求预览接口失败（404）。请重启后端后重试，或确认后端已部署最新版本。';
+      }
       setTestResult({
         loading: false,
         success: false,
         type: testType,
         title: '测试失败',
-        message: error.message,
+        message: errorMessage,
       });
     }
   };
 
+  const handleTaskDragStart = (taskId: string) => (event: DragEvent<HTMLElement>) => {
+    dragTaskIdRef.current = taskId;
+    setDragOverTaskId(taskId);
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', taskId);
+  };
 
-  // 任务管理表格列
+  const handleTaskDragOverRow = (targetTaskId: string) => (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    if (dragTaskIdRef.current && dragTaskIdRef.current !== targetTaskId) {
+      event.dataTransfer.dropEffect = 'move';
+      setDragOverTaskId(targetTaskId);
+    }
+  };
+
+  const handleTaskDrop = (targetTaskId: string) => async (event: DragEvent<HTMLElement>) => {
+    event.preventDefault();
+    const sourceTaskId = dragTaskIdRef.current || event.dataTransfer.getData('text/plain');
+
+    if (!sourceTaskId || sourceTaskId === targetTaskId) {
+      setDragOverTaskId(null);
+      dragTaskIdRef.current = null;
+      return;
+    }
+
+    try {
+      await reorderTasks(sourceTaskId, targetTaskId);
+      message.success('任务顺序已更新');
+    } catch (error: any) {
+      console.error('任务排序失败:', error);
+      message.error(`任务排序失败: ${error?.message || '请稍后重试'}`);
+    } finally {
+      setDragOverTaskId(null);
+      dragTaskIdRef.current = null;
+    }
+  };
+
+  const handleTaskDragEnd = () => {
+    setDragOverTaskId(null);
+    dragTaskIdRef.current = null;
+  };
+
+
+  // 浠诲姟绠＄悊琛ㄦ牸鍒?
   const taskColumns = [
+    {
+      title: '',
+      key: 'sort',
+      width: 56,
+      align: 'center' as const,
+      render: (_: any, record: TaskConfig) => (
+        <span
+          className="task-drag-handle"
+          draggable
+          onDragStart={handleTaskDragStart(record.id)}
+          onDragEnd={handleTaskDragEnd}
+          title="拖拽排序"
+          aria-label={`拖拽排序 ${record.name}`}
+        >
+          <HolderOutlined />
+        </span>
+      ),
+    },
     {
       title: '任务名称',
       dataIndex: 'name',
@@ -837,9 +1134,13 @@ function App() {
       title: '描述',
       dataIndex: 'description',
       key: 'description',
-      width: 250,
+      width: 320,
       render: (text: string) => (
-        <Text type="secondary" style={{ fontSize: 13 }} ellipsis={{ tooltip: text }}>
+        <Text
+          type="secondary"
+          style={{ fontSize: 13, display: 'block', maxWidth: 300 }}
+          ellipsis={{ tooltip: text }}
+        >
           {text || '-'}
         </Text>
       ),
@@ -885,10 +1186,10 @@ function App() {
       ),
     },
     {
-      title: '状态',
+      title: '启用状态',
       dataIndex: 'enabled',
       key: 'enabled',
-      width: 100,
+      width: 120,
       align: 'center' as const,
       render: (enabled: boolean, record: TaskConfig) => (
         <Switch
@@ -901,32 +1202,9 @@ function App() {
       ),
     },
     {
-      title: '验证状态',
-      key: 'verification',
-      width: 150,
-      align: 'center' as const,
-      render: (_: any, record: TaskConfig) => {
-        const status = record.verificationStatus;
-        if (!status) {
-          return <Tag color="default">未验证</Tag>;
-        }
-        const passedTests = [
-          status.feishuLoginTest ? 1 : 0,
-          status.feishuFieldTest ? 1 : 0,
-          status.kingdeeLoginTest ? 1 : 0,
-          status.fullFlowTest ? 1 : 0,
-        ].filter(Boolean).length;
-        return (
-          <Tag color={passedTests === 4 ? 'success' : passedTests > 0 ? 'processing' : 'default'}>
-            {passedTests}/4 通过
-          </Tag>
-        );
-      },
-    },
-    {
       title: '操作',
       key: 'action',
-      width: 280,
+      width: 260,
       align: 'center' as const,
       render: (_: any, record: TaskConfig) => (
         <Space size="small" wrap>
@@ -965,7 +1243,7 @@ function App() {
     },
   ];
 
-  // 执行监控表格列
+  // 鎵ц鐩戞帶琛ㄦ牸鍒?
   const monitoringColumns = [
     {
       title: '任务名称',
@@ -975,7 +1253,7 @@ function App() {
       render: (text: string) => <Text strong style={{ fontSize: 14 }}>{text}</Text>,
     },
     {
-      title: '状态',
+      title: '״̬',
       dataIndex: 'status',
       key: 'status',
       width: 100,
@@ -984,7 +1262,7 @@ function App() {
         const statusConfig: Record<TaskStatus, { color: string; bg: string; text: string; icon: React.ReactNode }> = {
           [TaskStatus.IDLE]: { color: '#999', bg: '#f5f5f5', text: '空闲', icon: <Badge status="default" /> },
           [TaskStatus.RUNNING]: { color: '#1890ff', bg: '#E6F7FF', text: '运行中', icon: <Badge status="processing" /> },
-          [TaskStatus.PAUSED]: { color: '#FAAD14', bg: '#FFF7E6', text: '暂停', icon: <Badge status="warning" /> },
+          [TaskStatus.PAUSED]: { color: '#FAAD14', bg: '#FFF7E6', text: '停止中', icon: <Badge status="warning" /> },
           [TaskStatus.SUCCESS]: { color: '#52C41A', bg: '#F6FFED', text: '成功', icon: <Badge status="success" /> },
           [TaskStatus.ERROR]: { color: '#FF4D4F', bg: '#FFF1F0', text: '失败', icon: <Badge status="error" /> },
           [TaskStatus.WARNING]: { color: '#FAAD14', bg: '#FFF7E6', text: '警告', icon: <Badge status="warning" /> },
@@ -1008,7 +1286,13 @@ function App() {
           <Progress 
             percent={progress} 
             size="small" 
-            status={record.instance.status === TaskStatus.ERROR ? 'exception' : 'active'}
+            status={
+              record.instance.status === TaskStatus.ERROR
+                ? 'exception'
+                : record.instance.status === TaskStatus.PAUSED
+                  ? 'normal'
+                  : 'active'
+            }
             style={{ flex: 1 }}
           />
           <Text type="secondary" style={{ fontSize: 12, minWidth: 35 }}>{progress}%</Text>
@@ -1111,18 +1395,26 @@ function App() {
     },
   ];
 
-  // 如果没有登录，显示登录页面
-  if (!isAuthenticated) {
+  if (!isInitialized) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Spin size="large" tip="正在恢复登录状态..." />
+      </div>
+    );
+  }
+
+  // 濡傛灉娌℃湁鐧诲綍锛屾樉绀虹櫥褰曢〉闈?
+  if (!currentAccount) {
     return <AuthPage onLoginSuccess={handleLoginSuccess} />;
   }
 
-  // 移动端视图
+  // 绉诲姩绔鍥?
   if (isMobile) {
     return (
       <>
         <div className="app-container mobile-view">
         <TopNavBar
-          title="金蝶数据传输"
+          title="金蝶数据传输平台"
           rightContent={<Button type="text" icon={<LogoutOutlined />} onClick={handleLogout} size="small" />}
         />
         <div className="mobile-content-wrapper">
@@ -1133,10 +1425,10 @@ function App() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <Text type="secondary" style={{ fontSize: 12 }}>总任务数</Text>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1890ff' }}>{tasks.length}</div>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#5f7e56' }}>{tasks.length}</div>
                     </div>
-                    <div style={{ width: 40, height: 40, background: '#E6F7FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <UnorderedListOutlined style={{ fontSize: 20, color: '#1890ff' }} />
+                    <div style={{ width: 40, height: 40, background: '#edf4e8', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <UnorderedListOutlined style={{ fontSize: 20, color: '#5f7e56' }} />
                     </div>
                   </div>
                 </Card>
@@ -1144,12 +1436,12 @@ function App() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <Text type="secondary" style={{ fontSize: 12 }}>今日执行</Text>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#6a9060' }}>
                         {taskInstances.filter(i => i.startTime && new Date(i.startTime).toDateString() === new Date().toDateString()).length}
                       </div>
                     </div>
-                    <div style={{ width: 40, height: 40, background: '#F6FFED', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <CheckCircleOutlined style={{ fontSize: 20, color: '#52c41a' }} />
+                    <div style={{ width: 40, height: 40, background: '#f1f8ec', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <CheckCircleOutlined style={{ fontSize: 20, color: '#6a9060' }} />
                     </div>
                   </div>
                 </Card>
@@ -1157,28 +1449,30 @@ function App() {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <div>
                       <Text type="secondary" style={{ fontSize: 12 }}>今日失败</Text>
-                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>
+                      <div style={{ fontSize: 24, fontWeight: 'bold', color: '#b66b57' }}>
                         {taskInstances.filter(i => i.startTime && new Date(i.startTime).toDateString() === new Date().toDateString() && i.status === TaskStatus.ERROR).length}
                       </div>
                     </div>
-                    <div style={{ width: 40, height: 40, background: '#FFF1F0', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <CloseCircleOutlined style={{ fontSize: 20, color: '#ff4d4f' }} />
+                    <div style={{ width: 40, height: 40, background: '#fbf1ed', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <CloseCircleOutlined style={{ fontSize: 20, color: '#b66b57' }} />
                     </div>
                   </div>
                 </Card>
               </div>
               <div className="mobile-task-list" style={{ position: 'relative', zIndex: 100, paddingBottom: '70px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <Text strong style={{ fontSize: 16 }}>任务列表</Text>
                   <Button type="primary" icon={<PlusOutlined />} size="small" onClick={() => { setEditingTask(null); setFormData({ name: '', description: '' }); setIsModalOpen(true); }}>新建</Button>
                 </div>
-                {tasks.length === 0 ? (<Empty description="暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />) : (
+                {tasks.length === 0 ? (
+                  <Empty description="暂无任务" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                ) : (
                   tasks.map(task => (
                     <MobileTaskCard
                       key={task.id}
                       task={task}
                       onEdit={() => { setEditingTask(task); setFormData({ name: task.name, description: task.description || '' }); setIsModalOpen(true); }}
-                      onConfig={() => { setSelectedTask(task); setIsConfigModalOpen(true); }}
+                      onConfig={() => handleConfigTask(task)}
                       onTest={() => {
                         console.log('测试按钮被点击，任务 ID:', task.id);
                         openVerificationTestModal(task.id);
@@ -1229,17 +1523,17 @@ function App() {
             <div className="mobile-profile">
               <Card className="stat-card" size="small" style={{ marginBottom: 12 }}>
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                  <div style={{ width: 60, height: 60, background: '#E6F7FF', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                    <UserOutlined style={{ fontSize: 30, color: '#1890ff' }} />
+                  <div style={{ width: 60, height: 60, background: '#edf4e8', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
+                    <UserOutlined style={{ fontSize: 30, color: '#5f7e56' }} />
                   </div>
                   <h3 style={{ margin: '0 0 8px 0', fontSize: 18 }}>{currentAccount?.username}</h3>
-                  <Text type="secondary" style={{ fontSize: 13 }}>注册时间：{new Date(currentAccount?.createdAt || Date.now()).toLocaleDateString('zh-CN')}</Text>
+                  <Text type='secondary' style={{ fontSize: 13 }}>注册时间：{new Date(currentAccount?.createdAt || Date.now()).toLocaleDateString('zh-CN')}</Text>
                 </div>
               </Card>
               <div className="mobile-actions">
                 <Button block icon={<ExportOutlined />} onClick={handleExport} size="large">导出数据</Button>
                 <Button block icon={<ImportOutlined />} onClick={handleImport} size="large" style={{ marginTop: 8 }}>导入数据</Button>
-                <Button block danger icon={<LogoutOutlined />} onClick={handleLogout} size="large" style={{ marginTop: 8 }}>退出登录</Button>
+                    <Button block danger icon={<LogoutOutlined />} onClick={handleLogout} size="large" style={{ marginTop: 8 }}>退出登录</Button>
               </div>
             </div>
           )}
@@ -1256,7 +1550,7 @@ function App() {
         />
       </div>
 
-      {/* 通用 Modal 组件 - 在移动端和桌面端都渲染 */}
+      {/* 閫氱敤 Modal 缁勪欢 - 鍦ㄧЩ鍔ㄧ鍜屾闈㈢閮芥覆鏌?*/}
       {/* 新建/编辑任务弹窗 */}
       <Modal
         open={isModalOpen}
@@ -1285,7 +1579,7 @@ function App() {
           <div>
             <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>任务描述</label>
             <TextArea
-              placeholder="请输入任务描述（可选）"
+              placeholder='请输入任务描述（可选）'
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
@@ -1383,16 +1677,15 @@ function App() {
         )}
       </Modal>
 
-      {/* WebAPI 日志查看弹窗 - 直接显示第一条记录详情 */}
+      {/* WebAPI 鏃ュ織鏌ョ湅寮圭獥 - 鐩存帴鏄剧ず绗竴鏉¤褰曡鎯?*/}
       <Modal
         title="WebAPI 调用详情（第一条记录）"
         open={showWebApiLogs && !!selectedInstance}
         onCancel={() => {
           setShowWebApiLogs(false);
-          setSelectedWebApiLog(null);
         }}
         footer={[
-          <Button key="close" onClick={() => { setShowWebApiLogs(false); setSelectedWebApiLog(null); }}>
+          <Button key="close" onClick={() => { setShowWebApiLogs(false); }}>
             关闭
           </Button>,
         ]}
@@ -1406,7 +1699,7 @@ function App() {
             ) : loadedWebApiLogs.length === 0 ? (
               <Empty description="暂无 WebAPI 调用记录（任务可能未执行到数据同步阶段）" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
             ) : (() => {
-              const firstLog = loadedWebApiLogs[0]; // 第一条记录（从后端获取的唯一一条）
+              const firstLog = loadedWebApiLogs[0]; // 绗竴鏉¤褰曪紙浠庡悗绔幏鍙栫殑鍞竴涓€鏉★級
               return (
                 <div>
                   <Card size="small" title={<Space><Text strong>Record ID: {firstLog.recordId}</Text>{firstLog.success ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>}</Space>} style={{ marginBottom: 16 }}>
@@ -1416,7 +1709,7 @@ function App() {
                     </div>
                     {firstLog.errorMessage && (
                       <div style={{ marginBottom: 16 }}>
-                        <Text type="danger">错误信息：{firstLog.errorMessage}</Text>
+                        <Text type='danger'>错误信息：{normalizeDisplayText(firstLog.errorMessage)}</Text>
                       </div>
                     )}
                   </Card>
@@ -1424,26 +1717,26 @@ function App() {
                     {
                       key: 'feishu',
                       label: '📄 飞书原始数据',
-                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.feishuData, null, 2)}</pre>
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(normalizeDisplayPayload(firstLog.feishuData), null, 2)}</pre>
                     },
                     {
                       key: 'request',
-                      label: '📤 导入金蝶的数据',
-                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.requestData, null, 2)}</pre>
+                      label: '📥 导入金蝶的数据',
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(normalizeDisplayPayload(firstLog.requestData), null, 2)}</pre>
                     },
                     {
                       key: 'response',
                       label: '📥 金蝶响应数据',
-                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.responseData, null, 2)}</pre>
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(normalizeDisplayPayload(firstLog.responseData), null, 2)}</pre>
                     },
                     {
                       key: 'writeback',
                       label: '↩️ 数据回写的数据',
                       children: firstLog.writeBackData && Object.keys(firstLog.writeBackData).length > 0 ? (
                         <div>
-                          <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.writeBackData, null, 2)}</pre>
+                          <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(normalizeDisplayPayload(firstLog.writeBackData), null, 2)}</pre>
                           {firstLog.writeBackError && (
-                            <Alert type="error" message={firstLog.writeBackError} style={{ marginTop: 8 }} />
+                            <Alert type="error" message={normalizeDisplayText(firstLog.writeBackError)} style={{ marginTop: 8 }} />
                           )}
                         </div>
                       ) : <Empty description="无回写数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -1456,7 +1749,7 @@ function App() {
         )}
       </Modal>
 
-      {/* 测试连接弹窗（含验证测试）- 移动端和桌面端共用 */}
+      {/* 娴嬭瘯杩炴帴寮圭獥锛堝惈楠岃瘉娴嬭瘯锛? 绉诲姩绔拰妗岄潰绔叡鐢?*/}
       <Modal
         title={
           <Space>
@@ -1531,13 +1824,25 @@ function App() {
               <Button
                 block
                 size="large"
+                onClick={() => executeVerificationTest('request-preview')}
+                icon={<EyeOutlined />}
+                style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <Text strong>4. 查看传入数据（不发送）</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>查看筛选后第一条将发送给 WebAPI 的完整请求体</Text>
+                </div>
+              </Button>
+              <Button
+                block
+                size="large"
                 onClick={() => executeVerificationTest('full-flow')}
                 icon={<CloudSyncOutlined />}
                 style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                  <Text strong>4. 第一条记录完整流程测试</Text>
-                  <Text type="secondary" style={{ fontSize: 12 }}>使用第一条记录执行完整同步流程</Text>
+                  <Text strong>5. 第一条记录完整流程测试</Text>
+                  <Text type="secondary" style={{ fontSize: 12 }}>使用第一条记录执行完整同步流程，并实时显示执行状态</Text>
                 </div>
               </Button>
             </div>
@@ -1557,11 +1862,12 @@ function App() {
           message={
             testModalType === 'feishu' ? '飞书登录测试' :
             testModalType === 'kingdee' ? '金蝶登录测试' :
-            '完整同步测试说明'
+            testModalType === 'verification' ? '验证测试说明' : '完整同步测试说明'
           }
           description={
             testModalType === 'feishu' ? <ul style={{ margin: 0, paddingLeft: 16 }}><li>Step 1: 使用配置的 AppID 和 AppSecret 请求飞书开放平台</li><li>Step 2: 获取 tenant_access_token (应用访问令牌)</li><li>Step 3: 验证是否能够访问飞书表格 API</li></ul> :
             testModalType === 'kingdee' ? <ul style={{ margin: 0, paddingLeft: 16 }}><li>Step 1: 使用配置的服务器地址和金蝶用户名密码</li><li>Step 2: 调用金蝶 WebAPI 的 /Login 接口</li><li>Step 3: 验证是否返回有效的 accountId</li></ul> :
+            testModalType === 'verification' ? <ul style={{ margin: 0, paddingLeft: 16 }}><li>Step 1~3: 先验证飞书与金蝶连接配置</li><li>Step 4: 仅预览将发送给 WebAPI 的数据，不会实际发送</li><li>Step 5: 执行筛选后第一条记录完整流程测试</li><li style={{ color: '#FF4D4F' }}>注意：Step 5 会实际调用金蝶与飞书回写，请在测试环境执行</li></ul> :
             <ul style={{ margin: 0, paddingLeft: 16 }}><li>Step 1: 从飞书表格查询第一条记录</li><li>Step 2: 将数据导入到金蝶系统</li><li>Step 3: 将同步状态写回飞书表格（仅在配置了回写字段时执行）</li><li style={{ color: '#FF4D4F' }}>注意：此测试会实际修改金蝶和飞书的数据，请谨慎使用！</li></ul>
           }
           type="warning"
@@ -1580,7 +1886,7 @@ function App() {
               </div>
             )}
 
-            {(testResult.type === 'feishu' || testResult.type === 'kingdee') && testResult.details && (
+            {(testResult.type === 'feishu' || testResult.type === 'kingdee' || testResult.type === 'feishu-login' || testResult.type === 'kingdee-login') && testResult.details && (
               <div>
                 {Object.entries(testResult.details).map(([key, value]) => (
                   <div key={key} style={{ marginBottom: 8 }}>
@@ -1617,6 +1923,39 @@ function App() {
                 ))}
               </div>
             )}
+            {testResult.type === 'request-preview' && (
+              <Collapse
+                style={{ marginTop: 12 }}
+                items={[
+                  {
+                    key: 'preview-request-data',
+                    label: '预览：即将发送给金蝶的请求体',
+                    children: (
+                      <pre style={{ margin: 0, fontSize: 11, maxHeight: 280, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 6 }}>
+                        {JSON.stringify(testResult.requestData || {}, null, 2)}
+                      </pre>
+                    ),
+                  },
+                  {
+                    key: 'preview-feishu-fields',
+                    label: '预览：当前第一条记录原始字段',
+                    children: (
+                      <pre style={{ margin: 0, fontSize: 11, maxHeight: 280, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 6 }}>
+                        {JSON.stringify(testResult.feishuFields || {}, null, 2)}
+                      </pre>
+                    ),
+                  },
+                ]}
+              />
+            )}
+            {testResult.type === 'full-flow' && testResult.instanceId && (
+              <Button
+                style={{ marginTop: 12 }}
+                onClick={() => handleOpenInstanceFromTest(testResult.instanceId)}
+              >
+                查看执行情况
+              </Button>
+            )}
             {testResult.loading && (
               <div style={{ textAlign: 'center', padding: '20px' }}>
                 <SyncOutlined spin style={{ fontSize: '24px' }} />
@@ -1648,20 +1987,6 @@ function App() {
   );
   }
 
-// 桌面端视图
-// 如果显示帮助页面
-if (showHelpPage) {
-  return (
-    <MainLayout
-      activeTab={activeTab}
-      onTabChange={(tab) => { handleTabChange(tab); }}
-      onLogout={handleLogout}
-    >
-      <HelpPage onBack={() => setShowHelpPage(false)} />
-    </MainLayout>
-  );
-}
-
 return (
   <MainLayout
     activeTab={activeTab}
@@ -1673,7 +1998,7 @@ return (
       <Card className="guide-card animate-fade-in-up" style={{ marginBottom: 24 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
           <Text strong style={{ fontSize: 16, color: '#1a1a2e' }}>
-            <CloudSyncOutlined style={{ marginRight: 8, color: '#4facfe' }} />
+            <CloudSyncOutlined style={{ marginRight: 8, color: '#6f9269' }} />
             操作指引
           </Text>
           <Button type="text" size="small" onClick={() => setShowGuide(false)}>
@@ -1702,18 +2027,18 @@ return (
             <div style={{
               width: 56,
               height: 56,
-              background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              background: 'linear-gradient(135deg, #6f9269 0%, #8aae7d 100%)',
               borderRadius: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 8px 24px rgba(79, 172, 254, 0.3)',
+              boxShadow: '0 8px 24px rgba(95, 128, 89, 0.26)',
             }}>
               <UnorderedListOutlined style={{ fontSize: 28, color: '#fff' }} />
             </div>
             <div>
               <Text type="secondary" style={{ fontSize: 13 }}>总任务数</Text>
-              <div style={{ fontSize: 32, fontWeight: 700, color: '#1a1a2e' }}>{tasks.length}</div>
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#2f4534' }}>{tasks.length}</div>
             </div>
           </div>
         </Card>
@@ -1724,18 +2049,18 @@ return (
             <div style={{
               width: 56,
               height: 56,
-              background: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
+              background: 'linear-gradient(135deg, #7ba16e 0%, #9fbc8d 100%)',
               borderRadius: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 8px 24px rgba(82, 196, 26, 0.3)',
+              boxShadow: '0 8px 24px rgba(123, 161, 110, 0.25)',
             }}>
               <CheckCircleOutlined style={{ fontSize: 28, color: '#fff' }} />
             </div>
             <div>
               <Text type="secondary" style={{ fontSize: 13 }}>今日执行</Text>
-              <div style={{ fontSize: 32, fontWeight: 700, color: '#52c41a' }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#6b8e61' }}>
                 {taskInstances.filter(i => i.startTime && new Date(i.startTime).toDateString() === new Date().toDateString()).length}
               </div>
             </div>
@@ -1748,18 +2073,18 @@ return (
             <div style={{
               width: 56,
               height: 56,
-              background: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
+              background: 'linear-gradient(135deg, #c78974 0%, #deab95 100%)',
               borderRadius: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 8px 24px rgba(255, 77, 79, 0.3)',
+              boxShadow: '0 8px 24px rgba(181, 118, 96, 0.23)',
             }}>
               <CloseCircleOutlined style={{ fontSize: 28, color: '#fff' }} />
             </div>
             <div>
               <Text type="secondary" style={{ fontSize: 13 }}>今日失败</Text>
-              <div style={{ fontSize: 32, fontWeight: 700, color: '#ff4d4f' }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#b57460' }}>
                 {taskInstances.filter(i =>
                   i.startTime &&
                   new Date(i.startTime).toDateString() === new Date().toDateString() &&
@@ -1776,18 +2101,18 @@ return (
             <div style={{
               width: 56,
               height: 56,
-              background: 'linear-gradient(135deg, #fa8c16 0%, #ffc53d 100%)',
+              background: 'linear-gradient(135deg, #b58a58 0%, #d3ad7f 100%)',
               borderRadius: 16,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 8px 24px rgba(250, 140, 22, 0.3)',
+              boxShadow: '0 8px 24px rgba(158, 125, 83, 0.24)',
             }}>
               <ThunderboltOutlined style={{ fontSize: 28, color: '#fff' }} />
             </div>
             <div>
               <Text type="secondary" style={{ fontSize: 13 }}>已启用</Text>
-              <div style={{ fontSize: 32, fontWeight: 700, color: '#fa8c16' }}>
+              <div style={{ fontSize: 32, fontWeight: 700, color: '#98754d' }}>
                 {tasks.filter(t => t.enabled).length}
               </div>
             </div>
@@ -1796,16 +2121,24 @@ return (
       </Col>
     </Row>
 
-    {/* 标签页 */}
-    <Tabs activeKey={activeTab} onChange={handleTabChange} className="custom-tabs">
+    {/* 鏍囩椤?*/}
+    <Tabs
+      activeKey={activeTab}
+      onChange={handleTabChange}
+      className="custom-tabs"
+      tabBarStyle={{ display: 'none' }}
+    >
       <TabPane
         tab={<span><UnorderedListOutlined />任务管理</span>}
         key="tasks"
       >
         <Card className="custom-card">
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text strong style={{ fontSize: 16 }}>任务列表</Text>
-            <Space>
+          <div className="task-toolbar">
+            <div className="task-title-block">
+              <Text strong style={{ fontSize: 16 }}>任务列表</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>拖拽左侧手柄可调整执行顺序</Text>
+            </div>
+            <Space wrap>
               <Button
                 icon={<ExportOutlined />}
                 onClick={handleExport}
@@ -1831,12 +2164,21 @@ return (
               </Button>
             </Space>
           </div>
+          <Text type="secondary" className="task-result-hint">
+            共 {tasks.length} 个任务
+          </Text>
           <Table
             columns={taskColumns}
             dataSource={tasks.map((task) => ({ ...task, key: task.id }))}
             pagination={{ pageSize: 10 }}
             className="custom-table"
-            scroll={{ x: 800 }}
+            tableLayout="fixed"
+            scroll={{ x: 1200 }}
+            rowClassName={(record: TaskConfig) => (record.id === dragOverTaskId ? 'task-row-drag-over' : '')}
+            onRow={(record: TaskConfig) => ({
+              onDragOver: handleTaskDragOverRow(record.id),
+              onDrop: handleTaskDrop(record.id),
+            })}
             locale={{ emptyText: <Empty description="暂无任务，点击上方按钮创建新任务" /> }}
           />
         </Card>
@@ -1908,7 +2250,7 @@ return (
         <div>
           <label style={{ display: 'block', marginBottom: 8, fontWeight: 500 }}>任务描述</label>
           <TextArea
-            placeholder="请输入任务描述（可选）"
+            placeholder='请输入任务描述（可选）'
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             rows={3}
@@ -1948,9 +2290,7 @@ return (
       open={!!selectedInstance}
       onCancel={() => {
         setSelectedInstance(null);
-        setLoadedTaskLogs([]);
         setLoadedWebApiLogs([]);
-        setLoadedFullTaskLogs([]);
       }}
       footer={[
         <Button key="close" onClick={() => setSelectedInstance(null)}>
@@ -1971,10 +2311,11 @@ return (
             </Col>
             <Col span={8}>
               <Card size="small">
-                <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>状态</div>
+                <div style={{ fontSize: 12, color: '#999', marginBottom: 4 }}>鐘舵€</div>
                 <div>
-                  <Tag color={selectedInstance.status === TaskStatus.RUNNING ? 'blue' : selectedInstance.status === TaskStatus.SUCCESS ? 'green' : selectedInstance.status === TaskStatus.WARNING ? 'orange' : 'default'}>
+                  <Tag color={selectedInstance.status === TaskStatus.RUNNING ? 'blue' : selectedInstance.status === TaskStatus.PAUSED ? 'orange' : selectedInstance.status === TaskStatus.SUCCESS ? 'green' : selectedInstance.status === TaskStatus.WARNING ? 'orange' : 'default'}>
                     {selectedInstance.status === TaskStatus.RUNNING ? '执行中' :
+                     selectedInstance.status === TaskStatus.PAUSED ? '停止中' :
                      selectedInstance.status === TaskStatus.SUCCESS ? '成功' :
                      selectedInstance.status === TaskStatus.WARNING ? '部分成功' : '失败'}
                   </Tag>
@@ -2005,16 +2346,15 @@ return (
       )}
     </Modal>
 
-    {/* WebAPI 日志查看弹窗 - 直接显示第一条记录详情 */}
+    {/* WebAPI 鏃ュ織鏌ョ湅寮圭獥 - 鐩存帴鏄剧ず绗竴鏉¤褰曡鎯?*/}
     <Modal
         title="WebAPI 调用详情（第一条记录）"
         open={showWebApiLogs && !!selectedInstance}
         onCancel={() => {
           setShowWebApiLogs(false);
-          setSelectedWebApiLog(null);
         }}
         footer={[
-          <Button key="close" onClick={() => { setShowWebApiLogs(false); setSelectedWebApiLog(null); }}>
+          <Button key="close" onClick={() => { setShowWebApiLogs(false); }}>
             关闭
           </Button>,
         ]}
@@ -2028,7 +2368,7 @@ return (
             ) : loadedWebApiLogs.length === 0 ? (
               <Empty description="暂无 WebAPI 调用记录（任务可能未执行到数据同步阶段）" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ padding: '40px 0' }} />
             ) : (() => {
-              const firstLog = loadedWebApiLogs[0]; // 第一条记录（从后端获取的唯一一条）
+              const firstLog = loadedWebApiLogs[0]; // 绗竴鏉¤褰曪紙浠庡悗绔幏鍙栫殑鍞竴涓€鏉★級
               return (
                 <div>
                   <Card size="small" title={<Space><Text strong>Record ID: {firstLog.recordId}</Text>{firstLog.success ? <Tag color="success">成功</Tag> : <Tag color="error">失败</Tag>}</Space>} style={{ marginBottom: 16 }}>
@@ -2038,7 +2378,7 @@ return (
                     </div>
                     {firstLog.errorMessage && (
                       <div style={{ marginBottom: 16 }}>
-                        <Text type="danger">错误信息：{firstLog.errorMessage}</Text>
+                        <Text type='danger'>错误信息：{normalizeDisplayText(firstLog.errorMessage)}</Text>
                       </div>
                     )}
                   </Card>
@@ -2046,26 +2386,26 @@ return (
                     {
                       key: 'feishu',
                       label: '📄 飞书原始数据',
-                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.feishuData, null, 2)}</pre>
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(normalizeDisplayPayload(firstLog.feishuData), null, 2)}</pre>
                     },
                     {
                       key: 'request',
-                      label: '📤 导入金蝶的数据',
-                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.requestData, null, 2)}</pre>
+                      label: '📥 导入金蝶的数据',
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(normalizeDisplayPayload(firstLog.requestData), null, 2)}</pre>
                     },
                     {
                       key: 'response',
                       label: '📥 金蝶响应数据',
-                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.responseData, null, 2)}</pre>
+                      children: <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(normalizeDisplayPayload(firstLog.responseData), null, 2)}</pre>
                     },
                     {
                       key: 'writeback',
                       label: '↩️ 数据回写的数据',
                       children: firstLog.writeBackData && Object.keys(firstLog.writeBackData).length > 0 ? (
                         <div>
-                          <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(firstLog.writeBackData, null, 2)}</pre>
+                          <pre style={{ margin: 0, fontSize: 11, maxHeight: 300, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 4 }}>{JSON.stringify(normalizeDisplayPayload(firstLog.writeBackData), null, 2)}</pre>
                           {firstLog.writeBackError && (
-                            <Alert type="error" message={firstLog.writeBackError} style={{ marginTop: 8 }} />
+                            <Alert type="error" message={normalizeDisplayText(firstLog.writeBackError)} style={{ marginTop: 8 }} />
                           )}
                         </div>
                       ) : <Empty description="无回写数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -2078,7 +2418,7 @@ return (
         )}
       </Modal>
 
-    {/* 测试连接弹窗（含验证测试）- 桌面端 */}
+    {/* 娴嬭瘯杩炴帴寮圭獥锛堝惈楠岃瘉娴嬭瘯锛? 妗岄潰绔?*/}
     <Modal
       title={
         <Space>
@@ -2153,13 +2493,25 @@ return (
             <Button
               block
               size="large"
+              onClick={() => executeVerificationTest('request-preview')}
+              icon={<EyeOutlined />}
+              style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                <Text strong>4. 查看传入数据（不发送）</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>查看筛选后第一条将发送给 WebAPI 的完整请求体</Text>
+              </div>
+            </Button>
+            <Button
+              block
+              size="large"
               onClick={() => executeVerificationTest('full-flow')}
               icon={<CloudSyncOutlined />}
               style={{ height: 50, justifyContent: 'flex-start', padding: '0 16px' }}
             >
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                <Text strong>4. 第一条记录完整流程测试</Text>
-                <Text type="secondary" style={{ fontSize: 12 }}>使用第一条记录执行完整同步流程</Text>
+                <Text strong>5. 第一条记录完整流程测试</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>使用第一条记录执行完整同步流程，并实时显示执行状态</Text>
               </div>
             </Button>
           </div>
@@ -2179,11 +2531,12 @@ return (
         message={
           testModalType === 'feishu' ? '飞书登录测试' :
           testModalType === 'kingdee' ? '金蝶登录测试' :
-          '完整同步测试说明'
+          testModalType === 'verification' ? '验证测试说明' : '完整同步测试说明'
         }
         description={
           testModalType === 'feishu' ? <ul style={{ margin: 0, paddingLeft: 16 }}><li>Step 1: 使用配置的 AppID 和 AppSecret 请求飞书开放平台</li><li>Step 2: 获取 tenant_access_token (应用访问令牌)</li><li>Step 3: 验证是否能够访问飞书表格 API</li></ul> :
           testModalType === 'kingdee' ? <ul style={{ margin: 0, paddingLeft: 16 }}><li>Step 1: 使用配置的服务器地址和金蝶用户名密码</li><li>Step 2: 调用金蝶 WebAPI 的 /Login 接口</li><li>Step 3: 验证是否返回有效的 accountId</li></ul> :
+          testModalType === 'verification' ? <ul style={{ margin: 0, paddingLeft: 16 }}><li>Step 1~3: 先验证飞书与金蝶连接配置</li><li>Step 4: 仅预览将发送给 WebAPI 的数据，不会实际发送</li><li>Step 5: 执行筛选后第一条记录完整流程测试</li><li style={{ color: '#FF4D4F' }}>注意：Step 5 会实际调用金蝶与飞书回写，请在测试环境执行</li></ul> :
           <ul style={{ margin: 0, paddingLeft: 16 }}><li>Step 1: 从飞书表格查询第一条记录</li><li>Step 2: 将数据导入到金蝶系统</li><li>Step 3: 将同步状态写回飞书表格（仅在配置了回写字段时执行）</li><li style={{ color: '#FF4D4F' }}>注意：此测试会实际修改金蝶和飞书的数据，请谨慎使用！</li></ul>
         }
         type="warning"
@@ -2202,7 +2555,7 @@ return (
             </div>
           )}
 
-          {(testResult.type === 'feishu' || testResult.type === 'kingdee') && testResult.details && (
+          {(testResult.type === 'feishu' || testResult.type === 'kingdee' || testResult.type === 'feishu-login' || testResult.type === 'kingdee-login') && testResult.details && (
             <div>
               {Object.entries(testResult.details).map(([key, value]) => (
                 <div key={key} style={{ marginBottom: 8 }}>
@@ -2239,6 +2592,39 @@ return (
               ))}
             </div>
           )}
+          {testResult.type === 'request-preview' && (
+            <Collapse
+              style={{ marginTop: 12 }}
+              items={[
+                {
+                  key: 'preview-request-data',
+                  label: '预览：即将发送给金蝶的请求体',
+                  children: (
+                    <pre style={{ margin: 0, fontSize: 11, maxHeight: 280, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 6 }}>
+                      {JSON.stringify(testResult.requestData || {}, null, 2)}
+                    </pre>
+                  ),
+                },
+                {
+                  key: 'preview-feishu-fields',
+                  label: '预览：当前第一条记录原始字段',
+                  children: (
+                    <pre style={{ margin: 0, fontSize: 11, maxHeight: 280, overflow: 'auto', background: '#f5f5f5', padding: 12, borderRadius: 6 }}>
+                      {JSON.stringify(testResult.feishuFields || {}, null, 2)}
+                    </pre>
+                  ),
+                },
+              ]}
+            />
+          )}
+          {testResult.type === 'full-flow' && testResult.instanceId && (
+            <Button
+              style={{ marginTop: 12 }}
+              onClick={() => handleOpenInstanceFromTest(testResult.instanceId)}
+            >
+              查看执行情况
+            </Button>
+          )}
           {testResult.loading && (
             <div style={{ textAlign: 'center', padding: '20px' }}>
               <SyncOutlined spin style={{ fontSize: '24px' }} />
@@ -2271,3 +2657,7 @@ return (
 }
 
 export default App;
+
+
+
+

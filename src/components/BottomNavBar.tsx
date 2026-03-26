@@ -22,12 +22,6 @@ export interface BottomNavBarProps {
   visible?: boolean;
 }
 
-/**
- * 移动端底部导航栏
- * - 触摸友好的大点击区域
- * - 支持 Badge 徽标
- * - 自动适配安全区域
- */
 export function BottomNavBar({
   activeKey = 'home',
   onTabChange,
@@ -37,28 +31,11 @@ export function BottomNavBar({
   const [currentKey, setCurrentKey] = useState(activeKey);
   const { isMobile } = useResponsive();
 
-  // 默认导航项
   const defaultItems: NavItem[] = [
-    {
-      key: 'home',
-      label: '首页',
-      icon: <HomeOutlined />,
-    },
-    {
-      key: 'tasks',
-      label: '任务',
-      icon: <CloudSyncOutlined />,
-    },
-    {
-      key: 'config',
-      label: '配置',
-      icon: <SettingOutlined />,
-    },
-    {
-      key: 'profile',
-      label: '我的',
-      icon: <UserOutlined />,
-    },
+    { key: 'home', label: '首页', icon: <HomeOutlined /> },
+    { key: 'tasks', label: '任务', icon: <CloudSyncOutlined /> },
+    { key: 'config', label: '配置', icon: <SettingOutlined /> },
+    { key: 'profile', label: '我的', icon: <UserOutlined /> },
   ];
 
   const navItems = items || defaultItems;
@@ -106,19 +83,34 @@ export function BottomNavBar({
           bottom: 0;
           left: 0;
           right: 0;
-          height: calc(56px + env(safe-area-inset-bottom, 0));
-          background: #ffffff;
-          border-top: 1px solid #e8edf2;
-          box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+          height: calc(64px + env(safe-area-inset-bottom, 0));
+          background: linear-gradient(180deg, rgba(251, 253, 255, 0.97) 0%, rgba(241, 246, 250, 0.96) 100%);
+          border-top: 1px solid #d0dae2;
+          box-shadow: 0 -8px 24px rgba(90, 110, 126, 0.14);
           display: flex;
           align-items: flex-start;
           justify-content: space-around;
           z-index: 999;
           padding-top: 8px;
           padding-bottom: env(safe-area-inset-bottom, 0);
+          backdrop-filter: blur(8px);
+          border-top-left-radius: 18px;
+          border-top-right-radius: 18px;
+          overflow: hidden;
+        }
+
+        .bottom-nav-bar::before {
+          content: '';
+          position: absolute;
+          top: 0;
+          left: 16px;
+          right: 16px;
+          height: 1px;
+          background: linear-gradient(90deg, rgba(121, 141, 157, 0) 0%, rgba(121, 141, 157, 0.58) 50%, rgba(121, 141, 157, 0) 100%);
         }
 
         .bottom-nav-item {
+          position: relative;
           display: flex;
           flex-direction: column;
           align-items: center;
@@ -129,42 +121,52 @@ export function BottomNavBar({
           cursor: pointer;
           flex: 1;
           min-height: 48px;
-          transition: all 0.15s ease;
+          color: #5d7182;
+          transition: all 0.18s ease;
+          border-radius: 12px;
+        }
+
+        .bottom-nav-item:hover {
+          color: #405b70;
         }
 
         .bottom-nav-item.active {
-          color: #4A90E2;
+          color: #2d4a5f;
+          transform: translateY(-2px);
+        }
+
+        .bottom-nav-item.active .bottom-nav-item-icon {
+          background: rgba(113, 142, 163, 0.2);
+          border-color: rgba(106, 130, 147, 0.48);
+          box-shadow: 0 4px 12px rgba(90, 113, 130, 0.2);
         }
 
         .bottom-nav-item-icon {
           font-size: 20px;
           margin-bottom: 2px;
+          width: 30px;
+          height: 30px;
+          border-radius: 10px;
           display: flex;
           align-items: center;
           justify-content: center;
+          border: 1px solid transparent;
+          background: rgba(231, 239, 244, 0.84);
+          transition: all 0.2s ease;
         }
 
         .bottom-nav-item-text {
-          font-size: 11px;
+          font-size: 12px;
           text-align: center;
           color: inherit;
-        }
-
-        /* 暗黑模式适配 */
-        @media (prefers-color-scheme: dark) {
-          .bottom-nav-bar {
-            background: #1a1a2e;
-            border-top-color: #2a2a4e;
-          }
+          font-weight: 700;
+          letter-spacing: 0.1px;
         }
       `}</style>
     </nav>
   );
 }
 
-/**
- * 移动端顶部导航栏
- */
 export interface TopNavBarProps {
   title?: string;
   onBack?: () => void;
@@ -194,7 +196,7 @@ export function TopNavBar({
             onClick={onBack}
             aria-label="返回"
           >
-            <span className="back-icon">‹</span>
+            <span className="back-icon">←</span>
           </button>
         )}
         <h1 className="top-nav-title">{title}</h1>
@@ -207,11 +209,12 @@ export function TopNavBar({
         .top-nav-bar {
           position: sticky;
           top: 0;
-          background: #ffffff;
-          border-bottom: 1px solid #e8edf2;
+          background: rgba(250, 253, 255, 0.93);
+          border-bottom: 1px solid #d9e3eb;
           z-index: 999;
           padding: 12px 16px;
           padding-top: max(12px, env(safe-area-inset-top, 0));
+          backdrop-filter: blur(8px);
         }
 
         .top-nav-content {
@@ -226,30 +229,27 @@ export function TopNavBar({
           justify-content: center;
           width: 40px;
           height: 40px;
-          background: transparent;
-          border: none;
+          background: #eef4f8;
+          border: 1px solid #d1dde7;
           cursor: pointer;
-          border-radius: 50%;
+          border-radius: 12px;
           transition: background 0.15s ease;
         }
 
-        .top-nav-back:hover {
-          background: #f5f5f5;
-        }
-
         .back-icon {
-          font-size: 24px;
+          font-size: 21px;
           line-height: 1;
-          color: #333;
+          color: #446075;
         }
 
         .top-nav-title {
           flex: 1;
           margin: 0;
           font-size: 17px;
-          font-weight: 600;
-          color: #1a1a2e;
+          font-weight: 700;
+          color: #30495c;
           text-align: center;
+          letter-spacing: 0.3px;
         }
 
         .top-nav-right {
@@ -257,30 +257,11 @@ export function TopNavBar({
           display: flex;
           justify-content: flex-end;
         }
-
-        /* 暗黑模式适配 */
-        @media (prefers-color-scheme: dark) {
-          .top-nav-bar {
-            background: #1a1a2e;
-            border-bottom-color: #2a2a4e;
-          }
-
-          .top-nav-title {
-            color: #eaeaea;
-          }
-
-          .back-icon {
-            color: #eaeaea;
-          }
-        }
       `}</style>
     </header>
   );
 }
 
-/**
- * 移动端汉堡菜单按钮
- */
 export interface HamburgerMenuProps {
   isOpen?: boolean;
   onClick?: () => void;
@@ -321,14 +302,14 @@ export function HamburgerMenu({
         .hamburger-line {
           width: 100%;
           height: 2px;
-          background: #333;
+          background: #476278;
           border-radius: 2px;
           transition: all 0.3s ease;
           transform-origin: center;
         }
 
         .hamburger-line.open {
-          background: #4A90E2;
+          background: #64839a;
         }
 
         .line-1.open {
@@ -342,14 +323,8 @@ export function HamburgerMenu({
         .line-3.open {
           transform: translateY(-${size / 2 - 1}px) rotate(-45deg);
         }
-
-        /* 暗黑模式适配 */
-        @media (prefers-color-scheme: dark) {
-          .hamburger-line:not(.open) {
-            background: #eaeaea;
-          }
-        }
       `}</style>
     </button>
   );
 }
+

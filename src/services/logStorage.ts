@@ -10,12 +10,6 @@ const STORE_TASK_LOGS = 'taskLogs';
 const STORE_WEB_API_LOGS = 'webApiLogs';
 
 // 日志索引结构
-interface LogIndex {
-  instanceId: string;
-  timestamp: string;
-  id: string;
-}
-
 class LogStorage {
   private db: IDBDatabase | null = null;
   private initPromise: Promise<void> | null = null;

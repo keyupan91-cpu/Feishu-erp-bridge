@@ -1,7 +1,17 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState } from 'react';
+import { Form, Input, Button, Tabs, message } from 'antd';
+import {
+  UserOutlined,
+  LockOutlined,
+  LoginOutlined,
+  UserAddOutlined,
+  DatabaseOutlined,
+  SafetyOutlined,
+  ThunderboltOutlined,
+} from '@ant-design/icons';
 import { useAccountStore } from '../stores/accountStore';
-import { Form, Input, Button, Tabs, message, Spin } from 'antd';
-import { UserOutlined, LockOutlined, LoginOutlined, UserAddOutlined, CloudSyncOutlined, DatabaseOutlined, SafetyOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { useResponsive } from '../hooks/useResponsive';
+import BrandLogo from './BrandLogo';
 
 interface AuthPageProps {
   onLoginSuccess: () => void;
@@ -10,40 +20,12 @@ interface AuthPageProps {
 const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
   const [activeTab, setActiveTab] = useState('login');
   const [loading, setLoading] = useState(false);
-  const { login, register, isInitialized } = useAccountStore();
+  const { login, register } = useAccountStore();
+  const { width, isSmallMobile } = useResponsive();
 
-  // 初始化检查 - 只在组件挂载时执行一次
-  useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        console.log('开始初始化...');
-        await useAccountStore.getState().initialize();
-        console.log('初始化完成');
-        const { currentAccount } = useAccountStore.getState();
-        if (currentAccount) {
-          onLoginSuccess();
-        }
-      } catch (error) {
-        console.error('初始化失败:', error);
-        // 初始化失败也显示登录界面
-      }
-    };
-    checkAuth();
+  const isCompactLayout = width <= 900;
+  const isPhone = width <= 480;
 
-    // 3秒超时保护，确保即使初始化卡住也能显示界面
-    const timeout = setTimeout(() => {
-      const { isInitialized } = useAccountStore.getState();
-      if (!isInitialized) {
-        console.log('初始化超时，强制显示登录界面');
-        useAccountStore.setState({ isInitialized: true });
-      }
-    }, 3000);
-
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // 空依赖数组，只在挂载时执行
-
-  // 登录
   const handleLogin = async (values: { username: string; password: string }) => {
     setLoading(true);
     try {
@@ -57,7 +39,6 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  // 注册
   const handleRegister = async (values: { username: string; password: string; confirmPassword: string }) => {
     if (values.password !== values.confirmPassword) {
       message.error('两次输入的密码不一致');
@@ -76,73 +57,76 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
     }
   };
 
-  if (!isInitialized) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh',
-        background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-      }}>
-        <Spin size="large" tip="初始化中..." />
-      </div>
-    );
-  }
-
   return (
-    <div style={styles.container}>
-      {/* 左侧 - 绚丽背景 */}
-      <div style={styles.leftPanel}>
-        <div style={styles.leftContent}>
-          <div style={styles.logoSection}>
-            <div style={styles.logoIcon}>
-              <CloudSyncOutlined />
+    <div style={{ ...styles.container, ...(isCompactLayout ? styles.containerCompact : {}) }}>
+      {!isCompactLayout && (
+        <div style={styles.leftPanel}>
+          <div style={styles.leftContent}>
+            <div style={styles.logoSection}>
+              <div style={styles.logoIcon}>
+                <BrandLogo size={78} />
+              </div>
+              <h1 style={styles.logoTitle}>金蝶数据传输平台</h1>
+              <p style={styles.logoSubtitle}>Feishu-Kingdee Data Bridge</p>
             </div>
-            <h1 style={styles.logoTitle}>金蝶数据传输平台</h1>
-            <p style={styles.logoSubtitle}>Feishu-Kingdee Data Bridge</p>
-          </div>
 
-          <div style={styles.featureList}>
-            <div style={styles.featureItem}>
-              <div style={styles.featureIcon}><DatabaseOutlined /></div>
-              <div>
-                <div style={styles.featureTitle}>数据同步</div>
-                <div style={styles.featureDesc}>飞书多维表格与金蝶ERP无缝对接</div>
+            <div style={styles.featureList}>
+              <div style={styles.featureItem}>
+                <div style={styles.featureIcon}><DatabaseOutlined /></div>
+                <div>
+                  <div style={styles.featureTitle}>数据同步</div>
+                  <div style={styles.featureDesc}>飞书多维表格与金蝶 ERP 平滑对接</div>
+                </div>
+              </div>
+              <div style={styles.featureItem}>
+                <div style={styles.featureIcon}><ThunderboltOutlined /></div>
+                <div>
+                  <div style={styles.featureTitle}>实时传输</div>
+                  <div style={styles.featureDesc}>稳定执行，状态反馈清晰可追踪</div>
+                </div>
+              </div>
+              <div style={styles.featureItem}>
+                <div style={styles.featureIcon}><SafetyOutlined /></div>
+                <div>
+                  <div style={styles.featureTitle}>安全可靠</div>
+                  <div style={styles.featureDesc}>本地部署，账号与数据独立隔离</div>
+                </div>
               </div>
             </div>
-            <div style={styles.featureItem}>
-              <div style={styles.featureIcon}><ThunderboltOutlined /></div>
-              <div>
-                <div style={styles.featureTitle}>实时传输</div>
-                <div style={styles.featureDesc}>高效稳定的数据传输引擎</div>
-              </div>
-            </div>
-            <div style={styles.featureItem}>
-              <div style={styles.featureIcon}><SafetyOutlined /></div>
-              <div>
-                <div style={styles.featureTitle}>安全可靠</div>
-                <div style={styles.featureDesc}>本地部署，数据安全有保障</div>
-              </div>
-            </div>
-          </div>
 
-          <div style={styles.decorations}>
-            <div style={styles.circle1}></div>
-            <div style={styles.circle2}></div>
-            <div style={styles.circle3}></div>
-            <div style={styles.floatingCard1}></div>
-            <div style={styles.floatingCard2}></div>
+            <div style={styles.decorations}>
+              <div style={styles.circle1}></div>
+              <div style={styles.circle2}></div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* 右侧 - 登录表单 */}
-      <div style={styles.rightPanel}>
-        <div style={styles.formContainer}>
-          <div style={styles.formHeader}>
-            <h2 style={styles.formTitle}>{activeTab === 'login' ? '欢迎回来' : '创建账户'}</h2>
-            <p style={styles.formSubtitle}>
+      <div style={{ ...styles.rightPanel, ...(isCompactLayout ? styles.rightPanelCompact : {}) }}>
+        {isCompactLayout && (
+          <div style={styles.mobileBrand}>
+            <div style={{ ...styles.logoIcon, ...styles.mobileBrandIcon }}>
+              <BrandLogo size={44} />
+            </div>
+            <div>
+              <div style={styles.mobileBrandTitle}>金蝶数据传输平台</div>
+              <div style={styles.mobileBrandSubtitle}>Feishu-Kingdee Data Bridge</div>
+            </div>
+          </div>
+        )}
+
+        <div
+          style={{
+            ...styles.formContainer,
+            ...(isCompactLayout ? styles.formContainerCompact : {}),
+            ...(isSmallMobile ? styles.formContainerSmallMobile : {}),
+          }}
+        >
+          <div style={{ ...styles.formHeader, ...(isCompactLayout ? styles.formHeaderCompact : {}) }}>
+            <h2 style={{ ...styles.formTitle, ...(isCompactLayout ? styles.formTitleCompact : {}) }}>
+              {activeTab === 'login' ? '欢迎回来' : '创建账号'}
+            </h2>
+            <p style={{ ...styles.formSubtitle, ...(isCompactLayout ? styles.formSubtitleCompact : {}) }}>
               {activeTab === 'login' ? '请登录您的账户以继续' : '注册新账户开始使用'}
             </p>
           </div>
@@ -150,8 +134,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
           <Tabs
             activeKey={activeTab}
             onChange={setActiveTab}
-            centered
-            style={styles.tabs}
+            centered={!isPhone}
+            style={{ ...styles.tabs, ...(isCompactLayout ? styles.tabsCompact : {}) }}
           >
             <Tabs.TabPane tab="登录" key="login">
               <Form onFinish={handleLogin} autoComplete="off" layout="vertical">
@@ -164,7 +148,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     prefix={<UserOutlined style={styles.inputIcon} />}
                     placeholder="请输入用户名"
                     size="large"
-                    style={styles.input}
+                    style={{ ...styles.input, ...(isSmallMobile ? styles.inputSmallMobile : {}) }}
                   />
                 </Form.Item>
 
@@ -177,7 +161,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     prefix={<LockOutlined style={styles.inputIcon} />}
                     placeholder="请输入密码"
                     size="large"
-                    style={styles.input}
+                    style={{ ...styles.input, ...(isSmallMobile ? styles.inputSmallMobile : {}) }}
                   />
                 </Form.Item>
 
@@ -189,7 +173,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     block
                     icon={<LoginOutlined />}
                     loading={loading}
-                    style={styles.submitBtn}
+                    style={{ ...styles.submitBtn, ...(isSmallMobile ? styles.submitBtnSmallMobile : {}) }}
                   >
                     登录
                   </Button>
@@ -208,7 +192,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     prefix={<UserOutlined style={styles.inputIcon} />}
                     placeholder="请输入用户名"
                     size="large"
-                    style={styles.input}
+                    style={{ ...styles.input, ...(isSmallMobile ? styles.inputSmallMobile : {}) }}
                   />
                 </Form.Item>
 
@@ -216,15 +200,15 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                   name="password"
                   rules={[
                     { required: true, message: '请输入密码' },
-                    { min: 6, message: '密码至少6位' },
+                    { min: 6, message: '密码至少 6 位' },
                   ]}
                   label="密码"
                 >
                   <Input.Password
                     prefix={<LockOutlined style={styles.inputIcon} />}
-                    placeholder="请输入密码（至少6位）"
+                    placeholder="请输入密码（至少 6 位）"
                     size="large"
-                    style={styles.input}
+                    style={{ ...styles.input, ...(isSmallMobile ? styles.inputSmallMobile : {}) }}
                   />
                 </Form.Item>
 
@@ -237,7 +221,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     prefix={<LockOutlined style={styles.inputIcon} />}
                     placeholder="请再次输入密码"
                     size="large"
-                    style={styles.input}
+                    style={{ ...styles.input, ...(isSmallMobile ? styles.inputSmallMobile : {}) }}
                   />
                 </Form.Item>
 
@@ -249,7 +233,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
                     block
                     icon={<UserAddOutlined />}
                     loading={loading}
-                    style={styles.submitBtn}
+                    style={{ ...styles.submitBtn, ...(isSmallMobile ? styles.submitBtnSmallMobile : {}) }}
                   >
                     注册
                   </Button>
@@ -258,7 +242,7 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
             </Tabs.TabPane>
           </Tabs>
 
-          <div style={styles.footer}>
+          <div style={{ ...styles.footer, ...(isCompactLayout ? styles.footerCompact : {}) }}>
             <SafetyOutlined style={{ marginRight: 6 }} />
             数据存储在本地服务器，每个账户数据独立隔离
           </div>
@@ -273,203 +257,241 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     minHeight: '100vh',
     width: '100vw',
-    position: 'fixed' as const,
+    position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
   },
+  containerCompact: {
+    position: 'relative',
+    width: '100%',
+    minHeight: '100vh',
+    height: 'auto',
+    overflowY: 'auto',
+    background: 'linear-gradient(180deg, #f1f7ed 0%, #eaf2e5 100%)',
+  },
   leftPanel: {
-    flex: '1 1 55%',
-    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 70%, #1a1a2e 100%)',
+    flex: '1 1 56%',
+    background: 'linear-gradient(145deg, #edf4e7 0%, #e4eddc 50%, #dce7d1 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative' as const,
+    position: 'relative',
     overflow: 'hidden',
+    borderRight: '1px solid #d4e1ca',
   },
   leftContent: {
-    padding: '60px',
-    maxWidth: '600px',
+    padding: '56px',
+    maxWidth: '620px',
     zIndex: 2,
-    position: 'relative' as const,
+    position: 'relative',
   },
   logoSection: {
-    marginBottom: '60px',
+    marginBottom: '56px',
   },
   logoIcon: {
-    width: '80px',
-    height: '80px',
-    background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    borderRadius: '20px',
+    width: '78px',
+    height: '78px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '40px',
-    color: '#fff',
-    marginBottom: '24px',
-    boxShadow: '0 20px 40px rgba(79, 172, 254, 0.3)',
+    marginBottom: '20px',
   },
   logoTitle: {
-    color: '#fff',
-    fontSize: '42px',
+    color: '#2f4633',
+    fontSize: '40px',
     fontWeight: 700,
     margin: 0,
-    letterSpacing: '2px',
+    letterSpacing: '1px',
   },
   logoSubtitle: {
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: '#688160',
     fontSize: '16px',
-    marginTop: '8px',
-    letterSpacing: '1px',
+    margin: '12px 0 0',
   },
   featureList: {
     display: 'flex',
-    flexDirection: 'column' as const,
-    gap: '24px',
+    flexDirection: 'column',
+    gap: '18px',
   },
   featureItem: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
-    padding: '20px',
-    background: 'rgba(255, 255, 255, 0.05)',
-    borderRadius: '16px',
-    backdropFilter: 'blur(10px)',
-    border: '1px solid rgba(255, 255, 255, 0.1)',
-    transition: 'all 0.3s ease',
+    alignItems: 'flex-start',
+    gap: '12px',
+    padding: '14px 16px',
+    borderRadius: '14px',
+    background: 'rgba(255, 255, 255, 0.44)',
+    border: '1px solid rgba(120, 151, 108, 0.18)',
+    backdropFilter: 'blur(3px)',
   },
   featureIcon: {
-    width: '48px',
-    height: '48px',
-    background: 'linear-gradient(135deg, rgba(79, 172, 254, 0.2) 0%, rgba(0, 242, 254, 0.2) 100%)',
-    borderRadius: '12px',
+    width: '32px',
+    height: '32px',
+    borderRadius: '10px',
+    background: '#edf5e8',
+    color: '#53744f',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '24px',
-    color: '#4facfe',
+    fontSize: '16px',
+    marginTop: '2px',
   },
   featureTitle: {
-    color: '#fff',
-    fontSize: '18px',
-    fontWeight: 600,
+    color: '#365136',
+    fontWeight: 700,
     marginBottom: '4px',
   },
   featureDesc: {
-    color: 'rgba(255, 255, 255, 0.5)',
-    fontSize: '14px',
+    color: '#5e745f',
+    fontSize: '13px',
+    lineHeight: 1.5,
   },
   decorations: {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    position: 'absolute',
+    inset: 0,
     pointerEvents: 'none',
   },
   circle1: {
-    position: 'absolute' as const,
-    width: '400px',
-    height: '400px',
-    border: '1px solid rgba(79, 172, 254, 0.1)',
+    position: 'absolute',
+    width: '220px',
+    height: '220px',
     borderRadius: '50%',
-    top: '-100px',
-    left: '-100px',
+    right: '-80px',
+    top: '-70px',
+    background: 'radial-gradient(circle, rgba(169, 201, 155, 0.32) 0%, rgba(169, 201, 155, 0) 68%)',
   },
   circle2: {
-    position: 'absolute' as const,
-    width: '600px',
-    height: '600px',
-    border: '1px solid rgba(79, 172, 254, 0.08)',
+    position: 'absolute',
+    width: '280px',
+    height: '280px',
     borderRadius: '50%',
-    top: '-200px',
-    left: '-200px',
-  },
-  circle3: {
-    position: 'absolute' as const,
-    width: '800px',
-    height: '800px',
-    border: '1px solid rgba(79, 172, 254, 0.05)',
-    borderRadius: '50%',
-    top: '-300px',
-    left: '-300px',
-  },
-  floatingCard1: {
-    position: 'absolute' as const,
-    width: '120px',
-    height: '80px',
-    background: 'rgba(79, 172, 254, 0.1)',
-    borderRadius: '12px',
-    bottom: '15%',
-    right: '10%',
-    animation: 'float 6s ease-in-out infinite',
-  },
-  floatingCard2: {
-    position: 'absolute' as const,
-    width: '80px',
-    height: '60px',
-    background: 'rgba(0, 242, 254, 0.1)',
-    borderRadius: '10px',
-    bottom: '25%',
-    right: '25%',
-    animation: 'float 4s ease-in-out infinite',
-    animationDelay: '1s',
+    left: '-120px',
+    bottom: '-130px',
+    background: 'radial-gradient(circle, rgba(142, 181, 130, 0.24) 0%, rgba(142, 181, 130, 0) 70%)',
   },
   rightPanel: {
-    flex: '1 1 45%',
-    background: '#f8fafc',
+    flex: '1 1 44%',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '40px',
+    background: 'linear-gradient(180deg, #f9fcf7 0%, #f2f8ee 100%)',
+    padding: '24px',
+  },
+  rightPanelCompact: {
+    padding: '18px 14px 24px',
+    width: '100%',
+    maxWidth: '560px',
+    margin: '0 auto',
+    flexDirection: 'column',
+    justifyContent: 'flex-start',
+    alignItems: 'stretch',
+    gap: '12px',
+  },
+  mobileBrand: {
+    width: '100%',
+    flexShrink: 0,
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '16px',
+    padding: '10px 12px',
+    borderRadius: '14px',
+    background: 'rgba(255, 255, 255, 0.78)',
+    border: '1px solid #dce8d4',
+  },
+  mobileBrandIcon: {
+    width: '48px',
+    height: '48px',
+    marginBottom: 0,
+  },
+  mobileBrandTitle: {
+    color: '#2f4633',
+    fontWeight: 700,
+    fontSize: '15px',
+  },
+  mobileBrandSubtitle: {
+    color: '#688160',
+    fontSize: '12px',
+    marginTop: '2px',
   },
   formContainer: {
     width: '100%',
-    maxWidth: '420px',
+    maxWidth: '460px',
+    background: '#ffffff',
+    borderRadius: '20px',
+    border: '1px solid #dbe8d4',
+    boxShadow: '0 18px 40px rgba(102, 128, 93, 0.16)',
+    padding: '28px 24px 20px',
+  },
+  formContainerCompact: {
+    width: '100%',
+    maxWidth: '100%',
+    borderRadius: '16px',
+    padding: '20px 16px 14px',
+  },
+  formContainerSmallMobile: {
+    borderRadius: '14px',
+    padding: '16px 14px 12px',
   },
   formHeader: {
-    marginBottom: '32px',
-    textAlign: 'center' as const,
+    marginBottom: '14px',
+  },
+  formHeaderCompact: {
+    marginBottom: '10px',
   },
   formTitle: {
-    fontSize: '28px',
-    fontWeight: 600,
-    color: '#1a1a2e',
     margin: 0,
+    color: '#2f4633',
+    fontSize: '26px',
+    fontWeight: 700,
+  },
+  formTitleCompact: {
+    fontSize: '22px',
   },
   formSubtitle: {
-    color: '#64748b',
-    marginTop: '8px',
-    fontSize: '15px',
+    margin: '8px 0 0',
+    color: '#6c7f6f',
+    fontSize: '14px',
+  },
+  formSubtitleCompact: {
+    marginTop: '6px',
+    fontSize: '13px',
   },
   tabs: {
-    marginBottom: '8px',
+    marginTop: '2px',
+  },
+  tabsCompact: {
+    marginTop: 0,
   },
   inputIcon: {
-    color: '#94a3b8',
+    color: '#7b9274',
   },
   input: {
+    borderRadius: '11px',
+  },
+  inputSmallMobile: {
     borderRadius: '10px',
-    height: '48px',
   },
   submitBtn: {
-    height: '48px',
+    height: '44px',
+    borderRadius: '12px',
+    fontWeight: 700,
+  },
+  submitBtnSmallMobile: {
+    height: '42px',
     borderRadius: '10px',
-    fontSize: '16px',
-    fontWeight: 500,
-    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-    border: 'none',
-    boxShadow: '0 4px 15px rgba(26, 26, 46, 0.3)',
   },
   footer: {
-    textAlign: 'center' as const,
-    marginTop: '32px',
-    color: '#94a3b8',
-    fontSize: '13px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
+    marginTop: '8px',
+    paddingTop: '10px',
+    borderTop: '1px dashed #dbe7d3',
+    color: '#7a8f7b',
+    fontSize: '12px',
+    textAlign: 'center',
+  },
+  footerCompact: {
+    fontSize: '11px',
   },
 };
 
