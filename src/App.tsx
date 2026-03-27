@@ -46,6 +46,7 @@ import {
   ImportOutlined,
   LogoutOutlined,
   UserOutlined,
+  LinkOutlined,
 
   ExperimentOutlined,
   SyncOutlined,
@@ -56,6 +57,7 @@ import { TaskStatus } from './types';
 import type { TaskConfig, TaskInstance } from './types';
 import TaskConfigComponent from './components/TaskConfig';
 import WebAPIDebugger from './components/WebAPIDebugger';
+import TaskTriggerApiPanel from './components/TaskTriggerApiPanel';
 import AuthPage from './components/AuthPage';
 // MobileLayout 缁勪欢宸插鍏ワ紝鐢ㄤ簬绉诲姩绔€傞厤
 import { useAccountStore } from './stores/accountStore';
@@ -138,6 +140,7 @@ function App() {
   const [showWebApiLogs, setShowWebApiLogs] = useState(false);
   const [loadedWebApiLogs, setLoadedWebApiLogs] = useState<any[]>([]); // 浠?IndexedDB 鍔犺浇鐨?WebAPI 鏃ュ織
   const [logsLoading, setLogsLoading] = useState(false);
+  const [refreshingInstances, setRefreshingInstances] = useState(false);
   const [instanceLatestLogs, setInstanceLatestLogs] = useState<Map<string, { timestamp: string; message: string; level: string }>>(new Map());
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const dragTaskIdRef = useRef<string | null>(null);
@@ -350,6 +353,7 @@ function App() {
       ...task.kingdeeConfig,
       loginParams: { ...task.kingdeeConfig.loginParams },
     },
+    triggerApi: task.triggerApi ? { ...task.triggerApi } : undefined,
     verificationStatus: task.verificationStatus ? { ...task.verificationStatus } : undefined,
   });
 
@@ -365,6 +369,70 @@ function App() {
       await updateTask(selectedTask.id, config);
       message.success('配置保存成功');
     }
+  };
+
+  const generateTaskTriggerToken = (): string => {
+    const randomBytes = new Uint8Array(24);
+    if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+      window.crypto.getRandomValues(randomBytes);
+      return Array.from(randomBytes)
+        .map((byte) => byte.toString(16).padStart(2, '0'))
+        .join('');
+    }
+    return `${Date.now().toString(16)}${Math.random().toString(16).slice(2)}${Math.random().toString(16).slice(2)}`;
+  };
+
+  const handleGenerateTaskTriggerApi = async (taskId: string, regenerate = false) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task) {
+      message.error('任务不存在');
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const token = generateTaskTriggerToken();
+    await updateTask(taskId, {
+      triggerApi: {
+        enabled: true,
+        token,
+        createdAt: task.triggerApi?.createdAt || now,
+        updatedAt: now,
+      },
+    });
+
+    message.success(regenerate ? '触发 API 已重新生成，旧地址已失效' : '触发 API 已生成');
+  };
+
+  const handleToggleTaskTriggerApi = async (taskId: string, enabled: boolean) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task?.triggerApi) {
+      message.warning('请先生成触发 API');
+      return;
+    }
+
+    await updateTask(taskId, {
+      triggerApi: {
+        ...task.triggerApi,
+        enabled,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+
+    message.success(enabled ? '触发 API 已启用' : '触发 API 已禁用');
+  };
+
+  const handleDeleteTaskTriggerApi = async (taskId: string) => {
+    const task = tasks.find((item) => item.id === taskId);
+    if (!task?.triggerApi) {
+      message.info('该任务尚未配置触发 API');
+      return;
+    }
+
+    await updateTask(taskId, {
+      triggerApi: undefined,
+    });
+
+    message.success('触发 API 配置已删除');
   };
 
   // 澶勭悊寮€濮嬩换鍔?
@@ -461,20 +529,15 @@ function App() {
         throw new Error('飞书表格 ID 未配置');
       }
 
-      const queryResult = await feishuService.testConnection(
-        task.feishuConfig.tableId,
-        task.feishuConfig.viewId,
-        task.feishuConfig.filterConditions
-      );
-
-      if (!queryResult.success) {
-        throw new Error(queryResult.message);
-      }
+      // 这里改为走后端预览接口，使用与“实际执行”一致的筛选与取数逻辑，
+      // 避免前端本地校验与执行链路口径不一致，导致显示 0 但实际有数据。
+      const previewResult = await taskExecutionApi.previewRequestData(taskId);
+      const recordCount = Number(previewResult?.preview?.filterMatchedCount ?? 0);
 
       verificationResults.feishuQuery = {
         success: true,
         error: '',
-        recordCount: queryResult.recordCount,
+        recordCount: Number.isFinite(recordCount) ? recordCount : 0,
       };
 
       // 步骤 3: 金蝶登录验证
@@ -710,12 +773,12 @@ function App() {
   };
 
   // 鍔犺浇鎵€鏈夊疄渚嬬殑鏈€鏂版棩蹇楋紙鐢ㄤ簬绉诲姩绔崱鐗囨樉绀猴級
-  const loadAllInstanceLogs = async () => {
+  const loadAllInstanceLogs = async (instances: TaskInstance[] = taskInstances) => {
     try {
       const { logStorage } = await import('./services/logStorage');
       const logsMap = new Map<string, { timestamp: string; message: string; level: string }>();
 
-      await Promise.all(taskInstances.map(async (instance) => {
+      await Promise.all(instances.map(async (instance) => {
         try {
           const logs = await logStorage.getTaskLogs(instance.id, { limit: 1 });
           if (logs.length > 0) {
@@ -733,6 +796,20 @@ function App() {
       setInstanceLatestLogs(logsMap);
     } catch (error) {
       console.error('加载所有实例日志失败', error);
+    }
+  };
+
+  const handleRefreshInstances = async () => {
+    setRefreshingInstances(true);
+    try {
+      await loadFromServer();
+      const latestInstances = useAccountStore.getState().taskInstances || [];
+      await loadAllInstanceLogs(latestInstances);
+      message.success('执行记录已刷新');
+    } catch (error: any) {
+      message.error(`刷新执行记录失败：${error?.message || '未知错误'}`);
+    } finally {
+      setRefreshingInstances(false);
     }
   };
 
@@ -1134,11 +1211,11 @@ function App() {
       title: '描述',
       dataIndex: 'description',
       key: 'description',
-      width: 320,
+      width: 240,
       render: (text: string) => (
         <Text
           type="secondary"
-          style={{ fontSize: 13, display: 'block', maxWidth: 300 }}
+          style={{ fontSize: 13, display: 'block', maxWidth: 220 }}
           ellipsis={{ tooltip: text }}
         >
           {text || '-'}
@@ -1146,47 +1223,7 @@ function App() {
       ),
     },
     {
-      title: '飞书配置',
-      key: 'feishu',
-      width: 120,
-      align: 'center' as const,
-      render: (_: any, record: TaskConfig) => (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <div style={{ 
-            width: 8, 
-            height: 8, 
-            borderRadius: '50%', 
-            background: record.feishuConfig.tableId ? '#1890ff' : '#d9d9d9',
-            flexShrink: 0
-          }} />
-          <Text style={{ fontSize: 13, color: record.feishuConfig.tableId ? '#1890ff' : '#999' }}>
-            {record.feishuConfig.tableId ? '已配置' : '未配置'}
-          </Text>
-        </div>
-      ),
-    },
-    {
-      title: '金蝶配置',
-      key: 'kingdee',
-      width: 120,
-      align: 'center' as const,
-      render: (_: any, record: TaskConfig) => (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-          <div style={{ 
-            width: 8, 
-            height: 8, 
-            borderRadius: '50%', 
-            background: record.kingdeeConfig.formId ? '#fa8c16' : '#d9d9d9',
-            flexShrink: 0
-          }} />
-          <Text style={{ fontSize: 13, color: record.kingdeeConfig.formId ? '#fa8c16' : '#999' }}>
-            {record.kingdeeConfig.formId ? '已配置' : '未配置'}
-          </Text>
-        </div>
-      ),
-    },
-    {
-      title: '启用状态',
+      title: '启用',
       dataIndex: 'enabled',
       key: 'enabled',
       width: 120,
@@ -1204,40 +1241,54 @@ function App() {
     {
       title: '操作',
       key: 'action',
-      width: 260,
+      width: 470,
       align: 'center' as const,
       render: (_: any, record: TaskConfig) => (
-        <Space size="small" wrap>
-          <Tooltip title="验证测试">
-            <Button
-              icon={<ExperimentOutlined />}
-              size="small"
-              style={{ color: '#722ed1', borderColor: '#722ed1' }}
-              ghost
-              onClick={() => openVerificationTestModal(record.id)}
-            >
-              验证
-            </Button>
-          </Tooltip>
-          <Tooltip title="编辑">
-            <Button icon={<EditOutlined />} size="small" type="primary" ghost onClick={() => handleEditTask(record)} />
-          </Tooltip>
-          <Tooltip title="复制">
-            <Button icon={<CopyOutlined />} size="small" onClick={() => copyTask(record.id, `${record.name} (副本)`)} />
-          </Tooltip>
-          <Tooltip title="配置">
-            <Button icon={<SettingOutlined />} size="small" style={{ color: '#fa8c16', borderColor: '#fa8c16' }} ghost onClick={() => handleConfigTask(record)} />
-          </Tooltip>
+        <Space size={[6, 6]} wrap>
+          <Button
+            icon={<SettingOutlined />}
+            size="small"
+            onClick={() => handleConfigTask(record)}
+          >
+            配置
+          </Button>
+          <Button
+            icon={<ExperimentOutlined />}
+            size="small"
+            style={{ color: '#1d39c4', borderColor: '#1d39c4' }}
+            ghost
+            onClick={() => openVerificationTestModal(record.id)}
+          >
+            验证测试
+          </Button>
+          <Button
+            icon={<EditOutlined />}
+            size="small"
+            onClick={() => handleEditTask(record)}
+          >
+            编辑
+          </Button>
+          <Button
+            icon={<CopyOutlined />}
+            size="small"
+            onClick={() => copyTask(record.id, `${record.name} (副本)`)}
+          >
+            复制
+          </Button>
           <Popconfirm title="确定删除?" onConfirm={() => deleteTask(record.id)}>
-            <Tooltip title="删除">
-              <Button icon={<DeleteOutlined />} size="small" danger />
-            </Tooltip>
+            <Button icon={<DeleteOutlined />} size="small" danger>
+              删除
+            </Button>
           </Popconfirm>
-          {record.enabled && (
-            <Tooltip title="执行">
-              <Button icon={<ThunderboltOutlined />} size="small" type="primary" onClick={() => handleStartTask(record.id)} />
-            </Tooltip>
-          )}
+          <Button
+            icon={<ThunderboltOutlined />}
+            size="small"
+            type="primary"
+            disabled={!record.enabled}
+            onClick={() => handleStartTask(record.id)}
+          >
+            执行
+          </Button>
         </Space>
       ),
     },
@@ -1493,7 +1544,17 @@ function App() {
             <div className="mobile-monitoring">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <Text strong style={{ fontSize: 16 }}>执行记录</Text>
-                <Button icon={<ClearOutlined />} onClick={handleClearInstances} disabled={taskInstances.length === 0} size="small">清空</Button>
+                <Space size={8}>
+                  <Button
+                    icon={<SyncOutlined />}
+                    onClick={handleRefreshInstances}
+                    loading={refreshingInstances}
+                    size="small"
+                  >
+                    刷新
+                  </Button>
+                  <Button icon={<ClearOutlined />} onClick={handleClearInstances} disabled={taskInstances.length === 0} size="small">清空</Button>
+                </Space>
               </div>
               {taskInstances.length === 0 ? (<Empty description="暂无执行记录" image={Empty.PRESENTED_IMAGE_SIMPLE} />) : (
                 taskInstances.map(instance => {
@@ -1517,6 +1578,16 @@ function App() {
           {activeTab === 'debugger' && (
             <div className="mobile-debugger">
               <WebAPIDebugger />
+            </div>
+          )}
+          {activeTab === 'trigger-api' && (
+            <div className="mobile-trigger-api">
+              <TaskTriggerApiPanel
+                tasks={tasks}
+                onGenerate={handleGenerateTaskTriggerApi}
+                onToggle={handleToggleTaskTriggerApi}
+                onDelete={handleDeleteTaskTriggerApi}
+              />
             </div>
           )}
           {activeTab === 'profile' && (
@@ -1545,6 +1616,7 @@ function App() {
             { key: 'tasks', label: '任务', icon: <UnorderedListOutlined /> },
             { key: 'monitoring', label: '监控', icon: <HistoryOutlined /> },
             { key: 'debugger', label: 'API', icon: <ApiOutlined /> },
+            { key: 'trigger-api', label: '触发', icon: <LinkOutlined /> },
             { key: 'profile', label: '我的', icon: <UserOutlined /> },
           ]}
         />
@@ -2170,10 +2242,10 @@ return (
           <Table
             columns={taskColumns}
             dataSource={tasks.map((task) => ({ ...task, key: task.id }))}
-            pagination={{ pageSize: 10 }}
+            pagination={false}
             className="custom-table"
             tableLayout="fixed"
-            scroll={{ x: 1200 }}
+            scroll={{ x: 1080 }}
             rowClassName={(record: TaskConfig) => (record.id === dragOverTaskId ? 'task-row-drag-over' : '')}
             onRow={(record: TaskConfig) => ({
               onDragOver: handleTaskDragOverRow(record.id),
@@ -2191,9 +2263,18 @@ return (
         <Card className="custom-card">
           <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text strong style={{ fontSize: 16 }}>执行记录</Text>
-            <Button icon={<ClearOutlined />} onClick={handleClearInstances} disabled={taskInstances.length === 0}>
-              清空记录
-            </Button>
+            <Space>
+              <Button
+                icon={<SyncOutlined />}
+                onClick={handleRefreshInstances}
+                loading={refreshingInstances}
+              >
+                刷新
+              </Button>
+              <Button icon={<ClearOutlined />} onClick={handleClearInstances} disabled={taskInstances.length === 0}>
+                清空记录
+              </Button>
+            </Space>
           </div>
           <Table
             columns={monitoringColumns}
@@ -2218,6 +2299,18 @@ return (
           key="debugger"
         >
           <WebAPIDebugger />
+        </TabPane>
+
+        <TabPane
+          tab={<span><LinkOutlined />任务触发 API</span>}
+          key="trigger-api"
+        >
+          <TaskTriggerApiPanel
+            tasks={tasks}
+            onGenerate={handleGenerateTaskTriggerApi}
+            onToggle={handleToggleTaskTriggerApi}
+            onDelete={handleDeleteTaskTriggerApi}
+          />
         </TabPane>
       </Tabs>
 

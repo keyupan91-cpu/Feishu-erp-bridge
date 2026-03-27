@@ -8,6 +8,13 @@
 
 **GitHub 仓库**: https://github.com/piki-vibe/Feishu-erp-bridge
 
+## 线上发布与回滚备注（2026-03-27）
+
+- ERP 线上目录：`/opt/feishu-erp-bridge`
+- 数据目录：`/opt/feishu-erp-bridge/server/data`（发布时禁止覆盖/删除）
+- 当前可回滚备份：`/opt/feishu-erp-bridge/.deploy-backup/20260327-165257`
+- 详细运维步骤见：`keyupan_长期运维手册.md`
+
 ---
 
 ## ⚠️ 为什么需要这个工具？
@@ -507,3 +514,12 @@ MIT License - 详见 [LICENSE](LICENSE) 文件
 - Removed fixed default example values for Feishu task fields (`App ID`, `App Secret`, `App Token`).
 - Default `admin` account initialization now starts with empty task data (no preset Feishu/Kingdee parameters).
 
+
+## Update (2026-03-27 UX refresh)
+
+- Added non-blocking JSON syntax checks for Kingdee JSON templates (hint only, save is not blocked).
+- Added an expanded JSON editor modal for long templates.
+- Made Kingdee configuration panels collapsible to keep long pages manageable.
+- Simplified task list layout by removing Feishu/Kingdee status columns and compressing description width.
+- Disabled task list pagination so drag-and-drop order works across the full list.
+- Updated task action buttons to labeled actions for clearer operation flow.

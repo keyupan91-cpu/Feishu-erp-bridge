@@ -5,22 +5,33 @@ export const TaskStatus = {
   PAUSED: 'paused',
   SUCCESS: 'success',
   ERROR: 'error',
-  WARNING: 'warning'
+  WARNING: 'warning',
 } as const;
 
 export type TaskStatus = typeof TaskStatus[keyof typeof TaskStatus];
 
 // 任务验证状态
 export interface TaskVerificationStatus {
-  feishuLoginTest: boolean;      // 飞书登录测试
-  feishuFieldTest: boolean;      // 飞书字段查询/筛选/回传测试
-  kingdeeLoginTest: boolean;     // 金蝶登录测试
-  fullFlowTest: boolean;         // 第一条记录完整流程测试
-  lastVerifiedAt?: string;       // 最后验证时间
+  feishuLoginTest: boolean;
+  feishuFieldTest: boolean;
+  kingdeeLoginTest: boolean;
+  fullFlowTest: boolean;
+  lastVerifiedAt?: string;
 }
 
 // 字段处理类型
-export type FieldProcessType = 'auto' | 'text' | 'number' | 'date' | 'datetime' | 'timestamp' | 'select' | 'multiselect' | 'checkbox' | 'person' | 'phone';
+export type FieldProcessType =
+  | 'auto'
+  | 'text'
+  | 'number'
+  | 'date'
+  | 'datetime'
+  | 'timestamp'
+  | 'select'
+  | 'multiselect'
+  | 'checkbox'
+  | 'person'
+  | 'phone';
 
 export interface FeishuFieldMeta {
   fieldId: string;
@@ -36,12 +47,12 @@ export interface FeishuFieldParam {
   id: string;
   variableName: string;
   fieldName: string;
-  processType?: FieldProcessType; // 处理类型（默认 auto 自动检测）
-  decimalPlaces?: number; // 小数位数（数字类型，默认 2）
-  dateFormat?: 'YYYY-MM-DD' | 'YYYY/MM/DD' | 'YYYYMMDD' | 'timestamp'; // 日期格式（日期类型）
-  sourceFieldType?: number; // 飞书字段类型编码（自动填充，如 1=文本，2=数字，5=日期）
-  sourceUiType?: string; // 飞书字段 ui_type
-  sourceFieldId?: string; // 飞书字段 id
+  processType?: FieldProcessType;
+  decimalPlaces?: number;
+  dateFormat?: 'YYYY-MM-DD' | 'YYYY/MM/DD' | 'YYYYMMDD' | 'timestamp';
+  sourceFieldType?: number;
+  sourceUiType?: string;
+  sourceFieldId?: string;
 }
 
 // 筛选条件
@@ -55,12 +66,12 @@ export interface FilterCondition {
 // 回写字段配置
 export interface WriteBackField {
   id: string;
-  fieldName: string; // 飞书字段名
-  source: 'success' | 'error' | 'response' | 'status'; // 数据来源：成功消息/错误消息/完整响应/响应状态
-  jsonPath?: string; // JSON路径，用于从响应中提取特定字段
+  fieldName: string;
+  source: 'success' | 'error' | 'response' | 'status';
+  jsonPath?: string;
 }
 
-// 飞书参数配置
+// 飞书配置
 export interface FeishuConfig {
   appId: string;
   appSecret: string;
@@ -69,7 +80,7 @@ export interface FeishuConfig {
   viewId?: string;
   fieldParams: FeishuFieldParam[];
   filterConditions?: FilterCondition[];
-  writeBackFields?: WriteBackField[]; // 回写字段配置
+  writeBackFields?: WriteBackField[];
 }
 
 // 金蝶登录参数
@@ -83,11 +94,19 @@ export interface KingdeeLoginParams {
   dbId?: string;
 }
 
-// 金蝶参数配置
+// 金蝶配置
 export interface KingdeeConfig {
   loginParams: KingdeeLoginParams;
   formId: string;
-  dataTemplate: string; // JSON模板
+  dataTemplate: string;
+}
+
+// 任务触发 API 配置
+export interface TaskTriggerApiConfig {
+  token: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // 任务配置
@@ -97,16 +116,17 @@ export interface TaskConfig {
   description: string;
   feishuConfig: FeishuConfig;
   kingdeeConfig: KingdeeConfig;
+  triggerApi?: TaskTriggerApiConfig;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
-  verificationStatus?: TaskVerificationStatus;  // 验证状态
+  verificationStatus?: TaskVerificationStatus;
 }
 
-// 任务执行记录
+// 任务执行日志
 export interface TaskLog {
   id: string;
-  instanceId: string; // 任务实例 ID
+  instanceId: string;
   taskId: string;
   timestamp: string;
   level: 'info' | 'warn' | 'error';
@@ -117,15 +137,15 @@ export interface TaskLog {
 // WebAPI 调用日志
 export interface WebAPILog {
   id: string;
-  instanceId: string; // 任务实例 ID
+  instanceId: string;
   timestamp: string;
-  recordId: string; // 飞书记录ID
-  feishuData?: any; // 飞书原始数据
-  requestData?: any; // 发送到金蝶的数据
-  responseData?: any; // 金蝶返回的数据
+  recordId: string;
+  feishuData?: any;
+  requestData?: any;
+  responseData?: any;
   success: boolean;
   errorMessage?: string;
-  writeBackData?: any; // 回写到飞书的数据
+  writeBackData?: any;
   writeBackSuccess?: boolean;
   writeBackError?: string;
 }
@@ -138,7 +158,7 @@ export interface TaskInstance {
   startTime?: string;
   endTime?: string;
   logs: any[];
-  webApiLogs: any[]; // 日志已移除，存储在 IndexedDB 中 // WebAPI调用日志
+  webApiLogs: any[];
   progress: number;
   totalCount?: number;
   successCount?: number;

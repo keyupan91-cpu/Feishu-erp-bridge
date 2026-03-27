@@ -96,12 +96,14 @@ const cloneTaskForStorage = <
   T extends {
     feishuConfig: TaskConfig['feishuConfig'];
     kingdeeConfig: TaskConfig['kingdeeConfig'];
+    triggerApi?: TaskConfig['triggerApi'];
     verificationStatus?: TaskVerificationStatus;
   }
 >(task: T): T => ({
   ...task,
   feishuConfig: cloneFeishuConfig(task.feishuConfig),
   kingdeeConfig: cloneKingdeeConfig(task.kingdeeConfig),
+  triggerApi: task.triggerApi ? { ...task.triggerApi } : undefined,
   verificationStatus: task.verificationStatus ? { ...task.verificationStatus } : undefined,
 });
 
@@ -112,6 +114,9 @@ const cloneTaskPatch = (patch: Partial<TaskConfig>): Partial<TaskConfig> => {
   }
   if (patch.kingdeeConfig) {
     isolatedPatch.kingdeeConfig = cloneKingdeeConfig(patch.kingdeeConfig);
+  }
+  if (Object.prototype.hasOwnProperty.call(patch, 'triggerApi')) {
+    isolatedPatch.triggerApi = patch.triggerApi ? { ...patch.triggerApi } : undefined;
   }
   if (patch.verificationStatus) {
     isolatedPatch.verificationStatus = { ...patch.verificationStatus };

@@ -1399,6 +1399,73 @@ async function saveLogCallback(username, instanceId, logData) {
   await saveWebApiLog(username, instanceId, logData);
 }
 
+async function launchTaskExecution(task, username, options = {}) {
+  const firstRecordOnly = options.firstRecordOnly === true;
+
+  const instanceId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+  const instance = {
+    id: instanceId,
+    taskId: task.id,
+    taskName: task.name,
+    username,
+    status: TaskStatus.IDLE,
+    startTime: null,
+    endTime: null,
+    progress: 0,
+    totalCount: 0,
+    successCount: 0,
+    errorCount: 0,
+    isStopping: false,
+  };
+
+  await saveInstanceFile(username, instance);
+
+  const executor = new TaskExecutor(
+    task,
+    instance,
+    username,
+    (currentInstanceId, logData) => saveLogCallback(username, currentInstanceId, logData),
+    saveInstanceCallback,
+    { firstRecordOnly }
+  );
+
+  addRunningTask(instanceId, executor);
+
+  executor.execute().catch(err => {
+    console.error(`任务执行异常: ${err.message}`);
+  }).finally(() => {
+    removeRunningTask(instanceId);
+  });
+
+  return { instanceId };
+}
+
+async function findTaskByTriggerToken(triggerToken) {
+  const files = await fs.readdir(DATA_DIR);
+
+  for (const file of files) {
+    if (!file.endsWith('.json')) {
+      continue;
+    }
+
+    const username = path.basename(file, '.json');
+    const accountFilePath = path.join(DATA_DIR, file);
+
+    try {
+      const accountData = JSON.parse(await fs.readFile(accountFilePath, 'utf8'));
+      const tasks = Array.isArray(accountData?.tasks) ? accountData.tasks : [];
+      const task = tasks.find(item => item?.triggerApi?.token === triggerToken);
+      if (task) {
+        return { username, task };
+      }
+    } catch (error) {
+      console.warn(`读取触发 token 映射失败: ${accountFilePath}`, error.message);
+    }
+  }
+
+  return null;
+}
+
 // 棰勮绗竴鏉″尮閰嶈褰曞皢鍙戦€佸埌閲戣澏鐨勮姹傛暟鎹紙涓嶅彂閫侊級
 const previewRequestHandler = async (req, res) => {
   try {
@@ -1470,43 +1537,8 @@ app.post('/api/tasks/:taskId/execute', authMiddleware, async (req, res) => {
       return res.status(404).json({ error: '任务不存在' });
     }
 
-    // 创建任务实例
-    const instanceId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
-    const instance = {
-      id: instanceId,
-      taskId: task.id,
-      taskName: task.name,
-      username: username,
-      status: TaskStatus.IDLE,
-      startTime: null,
-      endTime: null,
-      progress: 0,
-      totalCount: 0,
-      successCount: 0,
-      errorCount: 0,
-      isStopping: false,
-    };
-
-    // 娣囨繂鐡ㄩ崚婵嗩潗鐎圭偘绶?
-    await saveInstanceFile(username, instance);
-
-    // 閸掓稑缂撻幍褑顢戦崳銊ヨ嫙閸氼垰濮?
-    const executor = new TaskExecutor(
-      task,
-      instance,
-      username,
-      (instanceId, logData) => saveLogCallback(username, instanceId, logData),
-      saveInstanceCallback,
-      { firstRecordOnly: firstRecordOnly === true }
-    );
-
-    addRunningTask(instanceId, executor);
-
-    // 瀵倹顒為幍褑顢戞禒璇插锛堜笉闃诲鍝嶅簲锛?
-    executor.execute().catch(err => {
-      console.error(`娴犺濮熼幍褑顢戞径杈Е: ${err.message}`);
-    }).finally(() => {
-      removeRunningTask(instanceId);
+    const { instanceId } = await launchTaskExecution(task, username, {
+      firstRecordOnly: firstRecordOnly === true,
     });
 
     res.json({
@@ -1519,6 +1551,48 @@ app.post('/api/tasks/:taskId/execute', authMiddleware, async (req, res) => {
     res.status(500).json({ error: '启动任务失败: ' + error.message });
   }
 });
+
+const publicTaskTriggerHandler = async (req, res) => {
+  try {
+    const triggerToken = String(req.params?.triggerToken || '').trim();
+    if (!triggerToken) {
+      return res.status(400).json({ error: '缺少触发 token' });
+    }
+
+    const matched = await findTaskByTriggerToken(triggerToken);
+    if (!matched) {
+      return res.status(404).json({ error: '触发 token 无效或任务不存在' });
+    }
+
+    const { username, task } = matched;
+
+    if (!task?.triggerApi?.enabled) {
+      return res.status(403).json({ error: '该触发 API 已禁用' });
+    }
+
+    if (!task.enabled) {
+      return res.status(409).json({ error: '任务当前未启用，无法触发执行' });
+    }
+
+    const { instanceId } = await launchTaskExecution(task, username, {
+      firstRecordOnly: false,
+    });
+
+    res.json({
+      success: true,
+      message: '任务已通过触发 API 启动',
+      instanceId,
+      taskId: task.id,
+      taskName: task.name,
+    });
+  } catch (error) {
+    console.error('触发 API 启动任务失败:', error);
+    res.status(500).json({ error: '触发 API 启动任务失败: ' + error.message });
+  }
+};
+
+app.post('/api/public/task-trigger/:triggerToken', publicTaskTriggerHandler);
+app.get('/api/public/task-trigger/:triggerToken', publicTaskTriggerHandler);
 
 // 閸嬫粍顒涙禒璇插鎵ц
 app.post('/api/tasks/:instanceId/stop', authMiddleware, async (req, res) => {

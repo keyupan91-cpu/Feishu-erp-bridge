@@ -10,6 +10,7 @@ import {
   Table,
   InputNumber,
   Modal,
+  Alert,
 } from 'antd';
 import {
   PlusOutlined,
@@ -55,6 +56,8 @@ const cloneKingdeeConfig = (config: TaskConfig['kingdeeConfig']): TaskConfig['ki
 const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
   const { isMobile } = useResponsive();
   const [activeKey, setActiveKey] = useState<string[]>(['1']); // 手风琴展开状态
+  const [kingdeeActiveKey, setKingdeeActiveKey] = useState<string[]>(['k1', 'k2']);
+  const [templateEditorOpen, setTemplateEditorOpen] = useState(false);
   const [feishuConfig, setFeishuConfig] = useState(() => cloneFeishuConfig(task.feishuConfig));
   const [kingdeeConfig, setKingdeeConfig] = useState(() => cloneKingdeeConfig(task.kingdeeConfig));
   const [fieldParams, setFieldParams] = useState<FeishuFieldParam[]>(() => cloneFieldParams(task.feishuConfig.fieldParams || []));
@@ -75,6 +78,8 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
     setWriteBackFields(cloneWriteBackFields(nextFeishuConfig.writeBackFields || []));
     setFieldList([]);
     setPreviewLoadingId(null);
+    setKingdeeActiveKey(['k1', 'k2']);
+    setTemplateEditorOpen(false);
   }, [task.id, task.updatedAt]);
 
   // 处理函数 - 在 fieldParamColumns 之前定义
@@ -181,6 +186,30 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
       setPreviewLoadingId(null);
     }
   }, [feishuConfig, fieldList, filterConditions, previewValueToText]);
+
+  const kingdeeTemplateSyntaxHint = useMemo(() => {
+    const template = kingdeeConfig.dataTemplate || '';
+    if (!template.trim()) {
+      return {
+        type: 'warning' as const,
+        message: 'JSON 模板为空，保存前请确认。仅提示，不影响保存。',
+      };
+    }
+
+    const sanitizedTemplate = template.replace(/\{\{\s*[^{}]+\s*\}\}/g, '0');
+    try {
+      JSON.parse(sanitizedTemplate);
+      return {
+        type: 'success' as const,
+        message: 'JSON 语法检查通过（仅提示，不影响保存）。',
+      };
+    } catch {
+      return {
+        type: 'warning' as const,
+        message: 'JSON 语法可能有问题，请检查逗号、引号与括号（仅提示，不影响保存）。',
+      };
+    }
+  }, [kingdeeConfig.dataTemplate]);
 
   // 字段参数表格列
   const fieldParamColumns = useMemo(() => [
@@ -969,132 +998,146 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
   // 金蝶参数面板内容
   const renderKingdeePanel = () => (
     <Form layout="vertical" size="large">
-      <Form.Item label="App ID">
-        <Input
-          value={kingdeeConfig.loginParams.appId}
-          onChange={(e) =>
-            setKingdeeConfig({
-              ...kingdeeConfig,
-              loginParams: {
-                ...kingdeeConfig.loginParams,
-                appId: e.target.value,
-              },
-            })
+      <Collapse
+        activeKey={kingdeeActiveKey}
+        onChange={(key) => {
+          if (Array.isArray(key)) {
+            setKingdeeActiveKey(key.map((item) => String(item)));
+            return;
           }
-          size="large"
-        />
-      </Form.Item>
-      <Form.Item label="App Secret">
-        <Password
-          value={kingdeeConfig.loginParams.appSecret}
-          onChange={(e) =>
-            setKingdeeConfig({
-              ...kingdeeConfig,
-              loginParams: {
-                ...kingdeeConfig.loginParams,
-                appSecret: e.target.value,
-              },
-            })
-          }
-          size="large"
-        />
-      </Form.Item>
-      <Form.Item label="用户名">
-        <Input
-          value={kingdeeConfig.loginParams.username}
-          onChange={(e) =>
-            setKingdeeConfig({
-              ...kingdeeConfig,
-              loginParams: {
-                ...kingdeeConfig.loginParams,
-                username: e.target.value,
-              },
-            })
-          }
-          size="large"
-        />
-      </Form.Item>
-      <Form.Item label="DB ID (数据中心 ID)">
-        <Input
-          value={kingdeeConfig.loginParams.dbId}
-          onChange={(e) =>
-            setKingdeeConfig({
-              ...kingdeeConfig,
-              loginParams: {
-                ...kingdeeConfig.loginParams,
-                dbId: e.target.value,
-              },
-            })
-          }
-          size="large"
-        />
-      </Form.Item>
-      <Form.Item label="密码">
-        <Password
-          value={kingdeeConfig.loginParams.password}
-          onChange={(e) =>
-            setKingdeeConfig({
-              ...kingdeeConfig,
-              loginParams: {
-                ...kingdeeConfig.loginParams,
-                password: e.target.value,
-              },
-            })
-          }
-          size="large"
-        />
-      </Form.Item>
-      <Form.Item label="API 地址">
-        <Input
-          value={kingdeeConfig.loginParams.baseUrl}
-          onChange={(e) =>
-            setKingdeeConfig({
-              ...kingdeeConfig,
-              loginParams: {
-                ...kingdeeConfig.loginParams,
-                baseUrl: e.target.value,
-              },
-            })
-          }
-          size="large"
-        />
-      </Form.Item>
-      <Form.Item label="表单 ID">
-        <Input
-          value={kingdeeConfig.formId}
-          onChange={(e) =>
-            setKingdeeConfig({
-              ...kingdeeConfig,
-              formId: e.target.value,
-            })
-          }
-          size="large"
-        />
-      </Form.Item>
-      <Form.Item label="数据模板 (JSON)">
-        <div style={{ marginBottom: 8, textAlign: 'right' }}>
-          <Button
-            size="small"
-            onClick={() => {
-              Modal.info({
-                title: '选择变量插入',
-                content: (
-                  <div>
-                    <p>点击变量插入到模板中：</p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
-                      {fieldParams.length === 0 ? (
-                        <span style={{ color: '#999' }}>暂无变量，请先在飞书参数中添加字段参数</span>
-                      ) : (
-                        fieldParams.map((param) => (
-                          <Button
-                            key={param.id}
-                            size="small"
-                            onClick={() => {
-                              const textarea = document.querySelector('textarea[data-template="kingdee"]') as HTMLTextAreaElement;
-                              if (textarea) {
-                                const cursorPos = textarea.selectionStart || kingdeeConfig.dataTemplate?.length || 0;
-                                const textBefore = kingdeeConfig.dataTemplate?.substring(0, cursorPos) || '';
-                                const textAfter = kingdeeConfig.dataTemplate?.substring(cursorPos) || '';
+          setKingdeeActiveKey(key ? [String(key)] : []);
+        }}
+        size="large"
+      >
+        <Collapse.Panel header="金蝶基础参数" key="k1">
+          <Form.Item label="App ID">
+            <Input
+              value={kingdeeConfig.loginParams.appId}
+              onChange={(e) =>
+                setKingdeeConfig({
+                  ...kingdeeConfig,
+                  loginParams: {
+                    ...kingdeeConfig.loginParams,
+                    appId: e.target.value,
+                  },
+                })
+              }
+              size="large"
+            />
+          </Form.Item>
+          <Form.Item label="App Secret">
+            <Password
+              value={kingdeeConfig.loginParams.appSecret}
+              onChange={(e) =>
+                setKingdeeConfig({
+                  ...kingdeeConfig,
+                  loginParams: {
+                    ...kingdeeConfig.loginParams,
+                    appSecret: e.target.value,
+                  },
+                })
+              }
+              size="large"
+            />
+          </Form.Item>
+          <Form.Item label="用户名">
+            <Input
+              value={kingdeeConfig.loginParams.username}
+              onChange={(e) =>
+                setKingdeeConfig({
+                  ...kingdeeConfig,
+                  loginParams: {
+                    ...kingdeeConfig.loginParams,
+                    username: e.target.value,
+                  },
+                })
+              }
+              size="large"
+            />
+          </Form.Item>
+          <Form.Item label="DB ID (数据中心 ID)">
+            <Input
+              value={kingdeeConfig.loginParams.dbId}
+              onChange={(e) =>
+                setKingdeeConfig({
+                  ...kingdeeConfig,
+                  loginParams: {
+                    ...kingdeeConfig.loginParams,
+                    dbId: e.target.value,
+                  },
+                })
+              }
+              size="large"
+            />
+          </Form.Item>
+          <Form.Item label="密码">
+            <Password
+              value={kingdeeConfig.loginParams.password}
+              onChange={(e) =>
+                setKingdeeConfig({
+                  ...kingdeeConfig,
+                  loginParams: {
+                    ...kingdeeConfig.loginParams,
+                    password: e.target.value,
+                  },
+                })
+              }
+              size="large"
+            />
+          </Form.Item>
+          <Form.Item label="API 地址">
+            <Input
+              value={kingdeeConfig.loginParams.baseUrl}
+              onChange={(e) =>
+                setKingdeeConfig({
+                  ...kingdeeConfig,
+                  loginParams: {
+                    ...kingdeeConfig.loginParams,
+                    baseUrl: e.target.value,
+                  },
+                })
+              }
+              size="large"
+            />
+          </Form.Item>
+          <Form.Item label="表单 ID">
+            <Input
+              value={kingdeeConfig.formId}
+              onChange={(e) =>
+                setKingdeeConfig({
+                  ...kingdeeConfig,
+                  formId: e.target.value,
+                })
+              }
+              size="large"
+            />
+          </Form.Item>
+        </Collapse.Panel>
+
+        <Collapse.Panel header="数据模板 (JSON)" key="k2">
+          <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <Button
+              size="small"
+              onClick={() => {
+                Modal.info({
+                  title: '选择变量插入',
+                  content: (
+                    <div>
+                      <p>点击变量插入到模板中：</p>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                        {fieldParams.length === 0 ? (
+                          <span style={{ color: '#999' }}>暂无变量，请先在飞书参数中添加字段参数</span>
+                        ) : (
+                          fieldParams.map((param) => (
+                            <Button
+                              key={param.id}
+                              size="small"
+                              onClick={() => {
+                                const textarea = document.querySelector('textarea[data-template="kingdee"]') as HTMLTextAreaElement | null;
+                                const currentTemplate = kingdeeConfig.dataTemplate || '';
+                                const cursorPos = textarea?.selectionStart ?? currentTemplate.length;
+                                const textBefore = currentTemplate.substring(0, cursorPos);
+                                const textAfter = currentTemplate.substring(cursorPos);
                                 const variable = `{{${param.variableName}}}`;
                                 const newTemplate = textBefore + variable + textAfter;
                                 setKingdeeConfig({
@@ -1103,34 +1146,38 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
                                 });
                                 Modal.destroyAll();
                                 message.success(`已插入变量 {{${param.variableName}}}`);
-                              }
-                            }}
-                          >
-                            {param.variableName} ({param.fieldName})
-                          </Button>
-                        ))
-                      )}
+                              }}
+                            >
+                              {param.variableName} ({param.fieldName})
+                            </Button>
+                          ))
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ),
-                onOk() {},
-              });
-            }}
-          >
-            导入变量
-          </Button>
-        </div>
-        <TextArea
-          data-template="kingdee"
-          rows={10}
-          value={kingdeeConfig.dataTemplate}
-          onChange={(e) =>
-            setKingdeeConfig({
-              ...kingdeeConfig,
-              dataTemplate: e.target.value,
-            })
-          }
-          placeholder={`示例格式：
+                  ),
+                  onOk() {},
+                });
+              }}
+            >
+              导入变量
+            </Button>
+
+            <Button size="small" onClick={() => setTemplateEditorOpen(true)}>
+              展开编辑
+            </Button>
+          </div>
+
+          <TextArea
+            data-template="kingdee"
+            rows={10}
+            value={kingdeeConfig.dataTemplate}
+            onChange={(e) =>
+              setKingdeeConfig({
+                ...kingdeeConfig,
+                dataTemplate: e.target.value,
+              })
+            }
+            placeholder={`示例格式：
 {
   "NeedUpDateFields": [],
   "NeedReturnFields": [],
@@ -1144,9 +1191,39 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
     "FREMARK": "{{B}}"
   }
 }`}
-          style={{ fontSize: '14px' }}
-        />
-      </Form.Item>
+            style={{ fontSize: '14px' }}
+          />
+
+          <Alert
+            showIcon
+            type={kingdeeTemplateSyntaxHint.type}
+            message={kingdeeTemplateSyntaxHint.message}
+            style={{ marginTop: 8 }}
+          />
+
+          <Modal
+            title="编辑数据模板 (JSON)"
+            open={templateEditorOpen}
+            onCancel={() => setTemplateEditorOpen(false)}
+            onOk={() => setTemplateEditorOpen(false)}
+            okText="完成"
+            cancelText="取消"
+            width={isMobile ? 360 : 980}
+          >
+            <TextArea
+              rows={isMobile ? 18 : 26}
+              value={kingdeeConfig.dataTemplate}
+              onChange={(e) =>
+                setKingdeeConfig({
+                  ...kingdeeConfig,
+                  dataTemplate: e.target.value,
+                })
+              }
+              style={{ fontSize: 14 }}
+            />
+          </Modal>
+        </Collapse.Panel>
+      </Collapse>
       <Form.Item>
         <Button type="primary" onClick={handleSave} size="large" block>
           保存配置

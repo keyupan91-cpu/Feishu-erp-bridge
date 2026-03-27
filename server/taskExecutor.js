@@ -778,6 +778,7 @@ export class TaskExecutor {
   // 閺嶇厧绱￠崠鏍х摟濞堥潧鈧?
   formatFieldValue(fieldValue, param, sourceFieldType) {
     const processType = param.processType || 'auto';
+    const shouldRoundNumber = processType === 'number';
 
     let effectiveType = processType;
     if (processType === 'auto' && sourceFieldType !== undefined) {
@@ -792,14 +793,20 @@ export class TaskExecutor {
 
     switch (effectiveType) {
       case 'number':
-        if (typeof fieldValue === 'number') {
-          const decimalPlaces = param.decimalPlaces ?? 2;
-          return Number(fieldValue.toFixed(decimalPlaces));
-        }
-        const numValue = Number(fieldValue);
+        const numValue = typeof fieldValue === 'number' ? fieldValue : Number(fieldValue);
         if (!isNaN(numValue)) {
-          const decimalPlaces = param.decimalPlaces ?? 2;
-          return Number(numValue.toFixed(decimalPlaces));
+          if (!shouldRoundNumber) {
+            // auto 模式下保留原始数值，不做固定小数处理
+            return numValue;
+          }
+
+          const decimalPlacesNumber = Number(param.decimalPlaces);
+          const decimalPlaces = Number.isInteger(decimalPlacesNumber)
+            ? Math.min(Math.max(decimalPlacesNumber, 0), 100)
+            : 2;
+
+          // number 模式按配置固定位数，保留末尾 0（例如 2.22 -> 2.220000000）
+          return numValue.toFixed(decimalPlaces);
         }
         return fieldValue;
 
@@ -952,11 +959,19 @@ export class TaskExecutor {
 
       try {
         finalData = JSON.parse(templateWithValues);
-        if (!finalData.Model) {
-          finalData = { Model: { ...formattedData } };
-        }
-      } catch {
-        finalData = { Model: { ...formattedData } };
+      } catch (parseError) {
+        const message = parseError?.message || '未知 JSON 解析错误';
+        const templateSnippet = String(templateWithValues || '').slice(0, 1200);
+        const error = new Error(
+          `金蝶数据模板解析失败，请检查模板 JSON 格式是否正确：${message}。` +
+          '常见原因：缺少字段值、逗号位置错误、括号不匹配、数字变量未配置。'
+        );
+        error.responseData = {
+          type: 'template_parse_error',
+          parseError: message,
+          templateSnippet,
+        };
+        throw error;
       }
     }
 
@@ -1016,15 +1031,26 @@ export class TaskExecutor {
   // 閺囨寧宕插Ο鈩冩緲娑擃厾娈戦崡鐘辩秴缁?
   replacePlaceholders(obj, replacement) {
     if (typeof obj === 'string') {
+      const exactPlaceholderMatch = obj.match(/^\{\{\s*([^{}]+?)\s*\}\}$/);
+      if (exactPlaceholderMatch) {
+        const variableName = String(exactPlaceholderMatch[1] || '').trim();
+        if (variableName && Object.prototype.hasOwnProperty.call(replacement, variableName)) {
+          const exactValue = replacement[variableName];
+          if (exactValue === null || exactValue === undefined) {
+            return '';
+          }
+          if (typeof exactValue === 'number' || typeof exactValue === 'boolean') {
+            return exactValue;
+          }
+          return String(exactValue);
+        }
+      }
+
       let result = obj;
       for (const [key, value] of Object.entries(replacement)) {
         if (!key || key.trim() === '') continue;
         const placeholder = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
         result = result.replace(placeholder, String(value ?? ''));
-      }
-      if (/^-?\d+(\.\d+)?$/.test(result)) {
-        const numValue = parseFloat(result);
-        if (!isNaN(numValue)) return numValue;
       }
       if (result === 'true') return true;
       if (result === 'false') return false;

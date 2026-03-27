@@ -6,6 +6,7 @@ import {
   UnorderedListOutlined,
   HistoryOutlined,
   ApiOutlined,
+  LinkOutlined,
   UserOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
@@ -45,7 +46,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     {
       key: 'debugger',
       icon: <ApiOutlined />,
-      label: 'API 调试',
+      label: 'WebAPI 调试',
+    },
+    {
+      key: 'trigger-api',
+      icon: <LinkOutlined />,
+      label: '任务触发 API',
     },
   ];
 
@@ -70,6 +76,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     tasks: '配置并拖拽排序任务，快速管理同步策略',
     monitoring: '查看执行进度、日志与失败原因',
     debugger: '预览和排查 WebAPI 请求与响应',
+    'trigger-api': '为任务生成独立 HTTP 触发地址，供外部系统调用',
+    profile: '账户信息与数据管理',
   };
 
   const handleUserMenuClick = ({ key }: { key: string }) => {
@@ -125,7 +133,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           <div style={styles.headerLeft}>
             <div style={styles.pageTitleWrap}>
               <Text style={styles.pageTitle}>
-                {menuItems.find(item => item.key === activeTab)?.label || '首页'}
+                {menuItems.find((item) => item.key === activeTab)?.label || '工作台'}
               </Text>
               <Text style={styles.pageSubtitle}>
                 {tabDescriptions[activeTab] || '金蝶与飞书数据同步工作台'}
@@ -144,9 +152,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </Header>
 
-        <Content style={styles.content}>
-          {children}
-        </Content>
+        <Content style={styles.content}>{children}</Content>
       </Layout>
     </Layout>
   );
@@ -248,9 +254,6 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: 'flex',
     alignItems: 'center',
     gap: '14px',
-  },
-  headerIconBtn: {
-    color: '#657b8b',
   },
   userPanel: {
     display: 'flex',
