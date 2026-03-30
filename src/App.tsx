@@ -47,8 +47,6 @@ import {
   LogoutOutlined,
   UserOutlined,
   LinkOutlined,
-  FileSearchOutlined,
-
   ExperimentOutlined,
   SyncOutlined,
   HolderOutlined,
@@ -80,7 +78,6 @@ const TaskConfigComponent = lazy(() => import('./components/TaskConfig'));
 const WebAPIDebugger = lazy(() => import('./components/WebAPIDebugger'));
 const TaskTriggerApiPanel = lazy(() => import('./components/TaskTriggerApiPanel'));
 const TaskTestModal = lazy(() => import('./components/TaskTestModal'));
-const InvoiceOcrPanel = lazy(() => import('./components/InvoiceOcrPanel'));
 
 type MonitoringTableRow = {
   key: string;
@@ -90,10 +87,6 @@ type MonitoringTableRow = {
   startTime?: string;
   instance: TaskInstance;
 };
-
-function renderOcrFallback() {
-  return renderSectionFallback('正在加载发票 OCR 工作台...', 280);
-}
 
 function renderSectionFallback(tip: string, minHeight = 240) {
   return (
@@ -169,7 +162,6 @@ function App() {
   const [instanceLatestLogs, setInstanceLatestLogs] = useState<Map<string, { timestamp: string; message: string; level: string }>>(new Map());
   const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const dragTaskIdRef = useRef<string | null>(null);
-  const isInvoiceOcrTab = activeTab === 'invoice-ocr';
 
   // 杞瀹氭椂鍣ㄥ紩鐢?
   const pollingIntervalsRef = useRef<Map<string, ReturnType<typeof setInterval>>>(new Map());
@@ -1932,13 +1924,6 @@ function App() {
               </Suspense>
             </div>
           )}
-          {activeTab === 'invoice-ocr' && (
-            <div className="mobile-invoice-ocr">
-              <Suspense fallback={renderOcrFallback()}>
-                <InvoiceOcrPanel />
-              </Suspense>
-            </div>
-          )}
           {activeTab === 'trigger-api' && (
             <div className="mobile-trigger-api">
               <Suspense fallback={renderSectionFallback('正在加载任务触发 API 面板...')}>
@@ -1977,7 +1962,6 @@ function App() {
             { key: 'tasks', label: '任务', icon: <UnorderedListOutlined /> },
             { key: 'monitoring', label: '监控', icon: <HistoryOutlined /> },
             { key: 'debugger', label: 'API', icon: <ApiOutlined /> },
-            { key: 'invoice-ocr', label: 'OCR', icon: <FileSearchOutlined /> },
             { key: 'trigger-api', label: '触发', icon: <LinkOutlined /> },
             { key: 'profile', label: '我的', icon: <UserOutlined /> },
           ]}
@@ -1995,14 +1979,7 @@ return (
       onTabChange={handleTabChange}
       onLogout={handleLogout}
     >
-      {isInvoiceOcrTab ? (
-        <div className="invoice-ocr-page-shell animate-fade-in-up">
-          <Suspense fallback={renderOcrFallback()}>
-            <InvoiceOcrPanel />
-          </Suspense>
-        </div>
-      ) : (
-        <>
+      <>
           {/* 操作指引 */}
           {showGuide && currentAccount && (
             <Card className="guide-card animate-fade-in-up" style={{ marginBottom: 24 }}>
@@ -2221,12 +2198,6 @@ return (
               </Suspense>
             </TabPane>
 
-            <TabPane tab={<span><FileSearchOutlined />发票OCR</span>} key="invoice-ocr">
-              <Suspense fallback={renderOcrFallback()}>
-                <InvoiceOcrPanel />
-              </Suspense>
-            </TabPane>
-
             <TabPane tab={<span><LinkOutlined />任务触发 API</span>} key="trigger-api">
               <Suspense fallback={renderSectionFallback('正在加载任务触发 API 面板...')}>
                 <TaskTriggerApiPanel
@@ -2238,8 +2209,7 @@ return (
               </Suspense>
             </TabPane>
           </Tabs>
-        </>
-      )}
+      </>
     </MainLayout>
     {sharedModals}
   </>

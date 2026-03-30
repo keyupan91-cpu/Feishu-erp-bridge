@@ -42,11 +42,6 @@ fix_*.py
 *.patch
 tmp_invalid_format.txt
 
-# Python cache / runtime
-__pycache__/
-*.py[cod]
-ocr_service/.runtime/
-
 # Claude
 .claude/
 

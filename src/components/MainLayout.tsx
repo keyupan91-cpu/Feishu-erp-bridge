@@ -6,7 +6,6 @@ import {
   UnorderedListOutlined,
   HistoryOutlined,
   ApiOutlined,
-  FileSearchOutlined,
   LinkOutlined,
   UserOutlined,
   LogoutOutlined,
@@ -32,7 +31,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 }) => {
   const [collapsed, setCollapsed] = useState(false);
   const { currentAccount } = useAccountStore();
-  const isInvoiceOcrTab = activeTab === 'invoice-ocr';
 
   const menuItems = [
     {
@@ -49,11 +47,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       key: 'debugger',
       icon: <ApiOutlined />,
       label: 'WebAPI 调试',
-    },
-    {
-      key: 'invoice-ocr',
-      icon: <FileSearchOutlined />,
-      label: '发票OCR',
     },
     {
       key: 'trigger-api',
@@ -83,7 +76,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
     tasks: '配置并拖拽排序任务，快速管理同步策略',
     monitoring: '查看执行进度、日志与失败原因',
     debugger: '预览和排查 WebAPI 请求与响应',
-    'invoice-ocr': '上传图片或 PDF，提取发票号码',
     'trigger-api': '为任务生成独立 HTTP 触发地址，供外部系统调用',
     profile: '账户信息与数据管理',
   };
@@ -93,19 +85,6 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       onLogout();
     }
   };
-
-  const contentStyle: React.CSSProperties = isInvoiceOcrTab
-    ? {
-      ...styles.content,
-      margin: '14px',
-      padding: 0,
-      background: 'transparent',
-      border: 'none',
-      boxShadow: 'none',
-      minHeight: 'auto',
-      overflow: 'visible',
-    }
-    : styles.content;
 
   return (
     <Layout style={styles.layout}>
@@ -173,7 +152,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
           </div>
         </Header>
 
-        <Content style={contentStyle}>{children}</Content>
+        <Content style={styles.content}>{children}</Content>
       </Layout>
     </Layout>
   );
