@@ -246,8 +246,3 @@ scripts/
   start-tunnel.js       Cloudflare Tunnel 启动脚本
 ```
 
-## 当前版本特别说明
-
-- 当前 GitHub `main` 不包含 OCR 页面与 OCR 服务代码。
-- README 已按当前 `main` 的真实文件和真实接口重写。
-- 如果你的本地工作区仍保留 OCR，那是另一套本地版本，不代表 GitHub 当前内容。
