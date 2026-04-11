@@ -99,12 +99,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({
       >
         <div style={styles.logoWrap}>
           <div style={styles.logoIcon}>
-            <BrandLogo size={collapsed ? 36 : 42} />
+            <BrandLogo size={collapsed ? 28 : 32} />
           </div>
           {!collapsed && (
             <div style={styles.logoText}>
-              <span style={styles.logoTitle}>金蝶数据传输平台</span>
-              <span style={styles.logoSubtitle}>Fresh ERP Bridge</span>
+              <span style={styles.logoTitle}>云桥</span>
+              <span style={styles.logoSubtitle}>CloudLink</span>
             </div>
           )}
         </div>
@@ -136,7 +136,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
                 {menuItems.find((item) => item.key === activeTab)?.label || '工作台'}
               </Text>
               <Text style={styles.pageSubtitle}>
-                {tabDescriptions[activeTab] || '金蝶与飞书数据同步工作台'}
+                {tabDescriptions[activeTab] || 'CloudLink 数据同步工作台'}
               </Text>
             </div>
           </div>
@@ -161,50 +161,52 @@ const MainLayout: React.FC<MainLayoutProps> = ({
 const styles: { [key: string]: React.CSSProperties } = {
   layout: {
     minHeight: '100vh',
-    background: 'linear-gradient(180deg, #f5f8fa 0%, #edf3f6 100%)',
+    background: '#F8FAFC',
   },
   sider: {
-    background: 'linear-gradient(180deg, #f2f6f9 0%, #e8eef3 100%)',
-    borderRight: '1px solid #d7e0e7',
-    boxShadow: '2px 0 14px rgba(86, 103, 117, 0.08)',
+    background: '#FFFFFF',
+    borderRight: '1px solid #E2E8F0',
     position: 'relative',
   },
   logoWrap: {
-    height: '86px',
+    height: '64px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: '14px',
-    borderBottom: '1px solid rgba(126, 143, 156, 0.22)',
+    padding: '0 16px',
+    borderBottom: '1px solid #E2E8F0',
   },
   logoIcon: {
-    width: '44px',
-    height: '44px',
+    width: '36px',
+    height: '36px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   logoText: {
-    marginLeft: '12px',
+    marginLeft: '10px',
     display: 'flex',
     flexDirection: 'column',
   },
   logoTitle: {
-    color: '#2c4253',
-    fontSize: '16px',
+    color: '#0F172A',
+    fontSize: '15px',
     fontWeight: 700,
-    letterSpacing: '0.25px',
+    letterSpacing: '0',
+    lineHeight: '1.3',
   },
   logoSubtitle: {
-    color: '#677d8d',
+    color: '#94A3B8',
     fontSize: '11px',
-    marginTop: '2px',
-    letterSpacing: '0.3px',
+    marginTop: '1px',
+    letterSpacing: '0.02em',
+    fontWeight: 400,
   },
   menu: {
     background: 'transparent',
     border: 'none',
-    marginTop: '16px',
+    marginTop: '8px',
     padding: '0 8px',
   },
   collapseBtnWrap: {
@@ -214,21 +216,21 @@ const styles: { [key: string]: React.CSSProperties } = {
     transform: 'translateX(-50%)',
   },
   collapseBtn: {
-    color: '#607988',
-    fontSize: '18px',
-    width: 40,
-    height: 40,
-    borderRadius: '12px',
+    color: '#94A3B8',
+    fontSize: '16px',
+    width: 36,
+    height: 36,
+    borderRadius: '6px',
   },
   header: {
-    background: 'rgba(251, 253, 255, 0.93)',
-    backdropFilter: 'blur(8px)',
+    background: '#FFFFFF',
     padding: '0 24px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderBottom: '1px solid #dbe3e8',
-    height: '68px',
+    borderBottom: '1px solid #E2E8F0',
+    height: '60px',
+    boxShadow: 'none',
   },
   headerLeft: {
     display: 'flex',
@@ -237,58 +239,53 @@ const styles: { [key: string]: React.CSSProperties } = {
   pageTitleWrap: {
     display: 'flex',
     flexDirection: 'column',
-    gap: '2px',
+    gap: '1px',
   },
   pageTitle: {
-    fontSize: '20px',
-    fontWeight: 700,
-    color: '#263c4d',
-    letterSpacing: '0.25px',
+    fontSize: '16px',
+    fontWeight: 600,
+    color: '#0F172A',
+    letterSpacing: '0',
+    lineHeight: '1.4',
   },
   pageSubtitle: {
-    fontSize: '13px',
-    color: '#5f7384',
-    letterSpacing: '0.15px',
+    fontSize: '12px',
+    color: '#94A3B8',
+    letterSpacing: '0',
   },
   headerRight: {
     display: 'flex',
     alignItems: 'center',
-    gap: '14px',
+    gap: '8px',
   },
   userPanel: {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
     cursor: 'pointer',
-    padding: '4px 12px',
-    borderRadius: '20px',
-    background: '#e9f0f4',
-    border: '1px solid #ced9e1',
-    transition: 'all 0.2s ease',
+    padding: '5px 10px',
+    borderRadius: '6px',
+    transition: 'background 0.15s',
   },
   userAvatar: {
-    backgroundColor: '#597a8d',
+    backgroundColor: '#2563EB',
   },
   userOnlineDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: '50%',
-    background: '#6ca9bf',
-    boxShadow: '0 0 0 2px rgba(255,255,255,0.8)',
+    background: '#16A34A',
   },
   userName: {
-    color: '#31485a',
+    color: '#0F172A',
     fontSize: '14px',
-    fontWeight: 600,
+    fontWeight: 500,
   },
   content: {
-    margin: '18px',
-    padding: '22px',
-    background: 'linear-gradient(180deg, #ffffff 0%, #fbfdff 100%)',
-    borderRadius: '16px',
-    border: '1px solid #d8e1e8',
-    boxShadow: '0 10px 24px rgba(86, 103, 117, 0.08)',
-    minHeight: 'calc(100vh - 104px)',
+    margin: '0',
+    padding: '24px 28px',
+    background: 'transparent',
+    minHeight: 'calc(100vh - 60px)',
     overflow: 'auto',
   },
 };

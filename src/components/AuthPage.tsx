@@ -66,8 +66,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               <div style={styles.logoIcon}>
                 <BrandLogo size={78} />
               </div>
-              <h1 style={styles.logoTitle}>金蝶数据传输平台</h1>
-              <p style={styles.logoSubtitle}>Feishu-Kingdee Data Bridge</p>
+              <h1 style={styles.logoTitle}>云桥</h1>
+              <p style={styles.logoSubtitle}>CloudLink</p>
             </div>
 
             <div style={styles.featureList}>
@@ -109,8 +109,8 @@ const AuthPage: React.FC<AuthPageProps> = ({ onLoginSuccess }) => {
               <BrandLogo size={44} />
             </div>
             <div>
-              <div style={styles.mobileBrandTitle}>金蝶数据传输平台</div>
-              <div style={styles.mobileBrandSubtitle}>Feishu-Kingdee Data Bridge</div>
+              <div style={styles.mobileBrandTitle}>云桥</div>
+              <div style={styles.mobileBrandSubtitle}>CloudLink</div>
             </div>
           </div>
         )}

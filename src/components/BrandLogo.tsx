@@ -12,7 +12,7 @@ const BrandLogo: React.FC<BrandLogoProps> = ({ size = 44 }) => {
       viewBox="0 0 64 64"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      aria-label="金蝶数据传输平台"
+      aria-label="云桥 CloudLink"
     >
       <rect x="2.5" y="2.5" width="59" height="59" rx="18" fill="url(#bg)" />
       <path

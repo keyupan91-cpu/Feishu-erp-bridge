@@ -195,19 +195,22 @@ class FeishuService {
   async getToken() {
     try {
       const url = `${this.baseURL}/open-apis/auth/v3/tenant_access_token/internal`;
-      const response = await axios.post(url, {
-        app_id: this.appId,
-        app_secret: this.appSecret,
-      }, {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const response = await fetch(url, {
+        method: 'POST',
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
-        timeout: 20000,
+        body: JSON.stringify({ app_id: this.appId, app_secret: this.appSecret }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+      const resData = await response.json();
 
-      if (response.data.code === 0) {
-        this.accessToken = response.data.tenant_access_token;
+      if (resData.code === 0) {
+        this.accessToken = resData.tenant_access_token;
         return this.accessToken;
       } else {
-        throw new Error(`获取飞书令牌失败: ${response.data.msg}`);
+        throw new Error(`获取飞书令牌失败: ${resData.msg}`);
       }
     } catch (error) {
       console.error('获取飞书访问令牌失败:', error.message);
@@ -243,31 +246,34 @@ class FeishuService {
       while (true) {
         // Always use search endpoint so returned field keys remain field_name.
         // Using list endpoint returns field_id keys and breaks field-name based filtering.
-        const response = await axios.post(
-          `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/search`,
-          requestBody,
+        const searchParams = new URLSearchParams({ page_size: '500' });
+        if (pageToken) searchParams.set('page_token', pageToken);
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 30000);
+        const response = await fetch(
+          `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/search?${searchParams}`,
           {
+            method: 'POST',
             headers: {
               'Authorization': `Bearer ${this.accessToken}`,
               'Content-Type': 'application/json; charset=utf-8',
             },
-            params: {
-              page_size: 500,
-              page_token: pageToken,
-            },
-            timeout: 30000,
+            body: JSON.stringify(requestBody),
+            signal: ctrl.signal,
           }
         );
+        clearTimeout(tid);
+        const resData = await response.json();
 
-        if (response.data.code === 0) {
-          const items = response.data.data?.items || [];
+        if (resData.code === 0) {
+          const items = resData.data?.items || [];
           allItems.push(...items);
-          const hasMore = response.data.data?.has_more === true;
-          pageToken = hasMore ? response.data.data?.page_token : undefined;
+          const hasMore = resData.data?.has_more === true;
+          pageToken = hasMore ? resData.data?.page_token : undefined;
           if (!hasMore || !pageToken || pageToken === lastPageToken) break;
           lastPageToken = pageToken;
         } else {
-          throw new Error(`获取数据失败: ${response.data.msg}`);
+          throw new Error(`获取数据失败: ${resData.msg}`);
         }
       }
 
@@ -294,30 +300,33 @@ class FeishuService {
 
       let lastPageToken = undefined;
       while (true) {
-        const response = await axios.get(
-          `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/fields`,
+        const searchParams = new URLSearchParams({ page_size: '500' });
+        if (pageToken) searchParams.set('page_token', pageToken);
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 30000);
+        const response = await fetch(
+          `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/fields?${searchParams}`,
           {
+            method: 'GET',
             headers: {
               'Authorization': `Bearer ${this.accessToken}`,
               'Content-Type': 'application/json; charset=utf-8',
             },
-            params: {
-              page_size: 500,
-              page_token: pageToken,
-            },
-            timeout: 30000,
+            signal: ctrl.signal,
           }
         );
+        clearTimeout(tid);
+        const resData = await response.json();
 
-        if (response.data.code !== 0) {
-          throw new Error(`閼惧嘲褰囩€涙顔岄崚妤勩€冩径杈Е: ${response.data.msg}`);
+        if (resData.code !== 0) {
+          throw new Error(`获取飞书字段失败: ${resData.msg}`);
         }
 
-        const items = response.data.data?.items || [];
+        const items = resData.data?.items || [];
         allFields.push(...items);
 
-        const hasMore = response.data.data?.has_more === true;
-        pageToken = hasMore ? response.data.data?.page_token : undefined;
+        const hasMore = resData.data?.has_more === true;
+        pageToken = hasMore ? resData.data?.page_token : undefined;
         if (!hasMore || !pageToken || pageToken === lastPageToken) break;
         lastPageToken = pageToken;
       }
@@ -452,22 +461,27 @@ class FeishuService {
         await this.getToken();
       }
 
-      const response = await axios.put(
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 30000);
+      const response = await fetch(
         `${this.baseURL}/open-apis/bitable/v1/apps/${this.appToken}/tables/${tableId}/records/${recordId}`,
-        { fields: data },
         {
+          method: 'PUT',
           headers: {
             'Authorization': `Bearer ${this.accessToken}`,
             'Content-Type': 'application/json; charset=utf-8',
           },
-          timeout: 30000,
+          body: JSON.stringify({ fields: data }),
+          signal: ctrl.signal,
         }
       );
+      clearTimeout(tid);
+      const resData = await response.json();
 
-      if (response.data.code === 0) {
-        return response.data;
+      if (resData.code === 0) {
+        return resData;
       } else {
-        throw new Error(`回写数据失败: ${response.data.msg}`);
+        throw new Error(`回写数据失败: ${resData.msg}`);
       }
     } catch (error) {
       console.error('飞书回写失败:', error.message);

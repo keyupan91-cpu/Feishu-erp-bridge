@@ -1808,7 +1808,7 @@ function App() {
       <>
         <div className="app-container mobile-view">
         <TopNavBar
-          title="金蝶数据传输平台"
+          title="云桥"
           rightContent={<Button type="text" icon={<LogoutOutlined />} onClick={handleLogout} size="small" />}
         />
         <div className="mobile-content-wrapper">
@@ -1982,10 +1982,10 @@ return (
       <>
           {/* 操作指引 */}
           {showGuide && currentAccount && (
-            <Card className="guide-card animate-fade-in-up" style={{ marginBottom: 24 }}>
+            <Card className="guide-card animate-fade-in-up" style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text strong style={{ fontSize: 16, color: '#1a1a2e' }}>
-                  <CloudSyncOutlined style={{ marginRight: 8, color: '#6f9269' }} />
+                <Text strong style={{ fontSize: 14, color: '#0F172A' }}>
+                  <CloudSyncOutlined style={{ marginRight: 8, color: '#2563EB' }} />
                   操作指引
                 </Text>
                 <Button type="text" size="small" onClick={() => setShowGuide(false)}>
@@ -2006,108 +2006,6 @@ return (
             </Card>
           )}
 
-          {/* 概览看板 */}
-          <Row gutter={24} style={{ marginBottom: 24 }}>
-            <Col span={6}>
-              <Card className="stat-card" bodyStyle={{ padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{
-                    width: 56,
-                    height: 56,
-                    background: 'linear-gradient(135deg, #6f9269 0%, #8aae7d 100%)',
-                    borderRadius: 16,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 8px 24px rgba(95, 128, 89, 0.26)',
-                  }}>
-                    <UnorderedListOutlined style={{ fontSize: 28, color: '#fff' }} />
-                  </div>
-                  <div>
-                    <Text type="secondary" style={{ fontSize: 13 }}>总任务数</Text>
-                    <div style={{ fontSize: 32, fontWeight: 700, color: '#2f4534' }}>{tasks.length}</div>
-                  </div>
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card className="stat-card" bodyStyle={{ padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{
-                    width: 56,
-                    height: 56,
-                    background: 'linear-gradient(135deg, #7ba16e 0%, #9fbc8d 100%)',
-                    borderRadius: 16,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 8px 24px rgba(123, 161, 110, 0.25)',
-                  }}>
-                    <CheckCircleOutlined style={{ fontSize: 28, color: '#fff' }} />
-                  </div>
-                  <div>
-                    <Text type="secondary" style={{ fontSize: 13 }}>今日执行</Text>
-                    <div style={{ fontSize: 32, fontWeight: 700, color: '#6b8e61' }}>
-                      {taskInstances.filter(i => i.startTime && new Date(i.startTime).toDateString() === new Date().toDateString()).length}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card className="stat-card" bodyStyle={{ padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{
-                    width: 56,
-                    height: 56,
-                    background: 'linear-gradient(135deg, #c78974 0%, #deab95 100%)',
-                    borderRadius: 16,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 8px 24px rgba(181, 118, 96, 0.23)',
-                  }}>
-                    <CloseCircleOutlined style={{ fontSize: 28, color: '#fff' }} />
-                  </div>
-                  <div>
-                    <Text type="secondary" style={{ fontSize: 13 }}>今日失败</Text>
-                    <div style={{ fontSize: 32, fontWeight: 700, color: '#b57460' }}>
-                      {taskInstances.filter(i =>
-                        i.startTime &&
-                        new Date(i.startTime).toDateString() === new Date().toDateString() &&
-                        i.status === TaskStatus.ERROR
-                      ).length}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </Col>
-            <Col span={6}>
-              <Card className="stat-card" bodyStyle={{ padding: '24px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{
-                    width: 56,
-                    height: 56,
-                    background: 'linear-gradient(135deg, #b58a58 0%, #d3ad7f 100%)',
-                    borderRadius: 16,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 8px 24px rgba(158, 125, 83, 0.24)',
-                  }}>
-                    <ThunderboltOutlined style={{ fontSize: 28, color: '#fff' }} />
-                  </div>
-                  <div>
-                    <Text type="secondary" style={{ fontSize: 13 }}>已启用</Text>
-                    <div style={{ fontSize: 32, fontWeight: 700, color: '#98754d' }}>
-                      {tasks.filter(t => t.enabled).length}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </Col>
-          </Row>
-
           <Tabs
             activeKey={activeTab}
             onChange={handleTabChange}
@@ -2115,7 +2013,7 @@ return (
             tabBarStyle={{ display: 'none' }}
           >
             <TabPane tab={<span><UnorderedListOutlined />任务管理</span>} key="tasks">
-              <Card className="custom-card">
+              <div>
                 <div className="task-toolbar">
                   <div className="task-title-block">
                     <Text strong style={{ fontSize: 16 }}>任务列表</Text>
@@ -2158,11 +2056,11 @@ return (
                   })}
                   locale={{ emptyText: <Empty description="暂无任务，点击上方按钮创建新任务" /> }}
                 />
-              </Card>
+              </div>
             </TabPane>
 
             <TabPane tab={<span><HistoryOutlined />执行监控</span>} key="monitoring">
-              <Card className="custom-card">
+              <div>
                 <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text strong style={{ fontSize: 16 }}>执行记录</Text>
                   <Space>
@@ -2189,7 +2087,7 @@ return (
                   scroll={{ x: 900 }}
                   locale={{ emptyText: <Empty description="暂无执行记录" /> }}
                 />
-              </Card>
+              </div>
             </TabPane>
 
             <TabPane tab={<span><ApiOutlined />WebAPI调试</span>} key="debugger">

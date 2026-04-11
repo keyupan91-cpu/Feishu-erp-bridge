@@ -73,7 +73,7 @@ function LoginModal({ visible, onLogin, onCancel }: LoginModalProps) {
       <Card style={{ border: 'none', boxShadow: 'none' }}>
         <div style={{ textAlign: 'center', marginBottom: 16 }}>
           <Title level={3} style={{ marginBottom: 6 }}>
-            金蝶数据传输平台
+            云桥
           </Title>
           <Text type="secondary">请登录或注册账户</Text>
         </div>
