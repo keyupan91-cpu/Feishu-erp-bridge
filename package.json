@@ -9,8 +9,6 @@
     "dev:client": "vite",
     "dev:server": "node server/server.js",
     "server": "node server/server.js",
-    "ocr:start": "powershell -ExecutionPolicy Bypass -File scripts/start-ocr.ps1",
-    "ocr:stop": "powershell -ExecutionPolicy Bypass -File scripts/stop-ocr.ps1",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",

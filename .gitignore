@@ -50,10 +50,15 @@ ocr_service/.runtime/
 # Claude
 .claude/
 
+# Runtime logs and PS modules
+.runtime-logs/
+.psmodules/
+
+# Deploy packages
+*.tar.gz
+
 # Server data (user data, should not be committed)
-server/data/*.json
-server/data/*_instances/
-server/data/admin_logs/
+server/data/
 
 # Screenshot directory (for documentation)
 # Note: PNG/JPG files are allowed in docs/screenshots/ for README documentation

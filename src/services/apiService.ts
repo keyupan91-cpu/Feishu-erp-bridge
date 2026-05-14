@@ -303,48 +303,6 @@ export const taskExecutionApi = {
   },
 };
 
-export interface OcrServiceStatus {
-  success?: boolean;
-  running: boolean;
-  baseUrl: string;
-  extractUrl: string;
-  batchUrl: string;
-  supportedFormats: string[];
-  lowPowerMode: boolean;
-  processIsolated: boolean;
-  health: null | {
-    status: string;
-    engine_ready: boolean;
-    max_file_size_mb: number;
-    batch_max_files: number;
-    ocr_cpu_threads: number;
-    keep_model_loaded: boolean;
-    process_isolated?: boolean;
-  };
-  message?: string;
-  output?: string;
-}
-
-export const ocrControlApi = {
-  getStatus: async () => {
-    return request<OcrServiceStatus>('/ocr/service/status');
-  },
-
-  startService: async () => {
-    return request<OcrServiceStatus>('/ocr/service/start', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-  },
-
-  stopService: async () => {
-    return request<OcrServiceStatus>('/ocr/service/stop', {
-      method: 'POST',
-      body: JSON.stringify({}),
-    });
-  },
-};
-
 // 璐︽埛绠＄悊 API
 export const accountApi = {
   // 鍒犻櫎璐︽埛

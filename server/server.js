@@ -25,15 +25,6 @@ const app = express();
 const PORT = 3001;
 const JWT_SECRET = process.env.JWT_SECRET || 'kingdee-sync-secret-key-2024';
 const DATA_DIR = path.join(__dirname, 'data');
-const OCR_PORT = Number(process.env.OCR_PORT || 5000);
-const OCR_BASE_URL = process.env.OCR_BASE_URL || `http://127.0.0.1:${OCR_PORT}`;
-const OCR_MANAGE_MODE = String(
-  process.env.OCR_MANAGE_MODE || (process.platform === 'win32' ? 'script' : 'none')
-).trim().toLowerCase();
-const OCR_CONTAINER_NAME = process.env.OCR_CONTAINER_NAME || 'keyupan-erp-ocr';
-const DOCKER_SOCKET_PATH = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock';
-const OCR_START_SCRIPT = path.join(projectRoot, process.platform === 'win32' ? 'scripts/start-ocr.ps1' : 'scripts/start-ocr.sh');
-const OCR_STOP_SCRIPT = path.join(projectRoot, process.platform === 'win32' ? 'scripts/stop-ocr.ps1' : 'scripts/stop-ocr.sh');
 const ENABLE_HTTP_LOG = process.env.ENABLE_HTTP_LOG === 'true';
 const ENABLE_VERBOSE_LOG = process.env.ENABLE_VERBOSE_LOG === 'true';
 const ENABLE_INFO_LOG = process.env.ENABLE_INFO_LOG === 'true';
@@ -52,280 +43,6 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function runPowerShellScript(scriptPath, timeout = 90000) {
-  return runLocalScript(scriptPath, timeout);
-}
-
-async function runLocalScript(scriptPath, timeout = 90000) {
-  const isWindows = process.platform === 'win32';
-  const executable = isWindows ? 'powershell.exe' : 'bash';
-  const args = isWindows
-    ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath]
-    : [scriptPath];
-
-  const { stdout, stderr } = await execFileAsync(
-    executable,
-    args,
-    {
-      cwd: projectRoot,
-      timeout,
-      maxBuffer: 1024 * 1024,
-    }
-  );
-
-  return {
-    stdout: String(stdout || '').trim(),
-    stderr: String(stderr || '').trim(),
-  };
-}
-
-function parseDockerJson(payload) {
-  if (!payload) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(payload);
-  } catch {
-    return null;
-  }
-}
-
-async function callDockerApi(method, requestPath) {
-  if (process.platform === 'win32') {
-    throw new Error('Docker socket is only available on Linux deployments');
-  }
-
-  return await new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        socketPath: DOCKER_SOCKET_PATH,
-        path: `/v1.41${requestPath}`,
-        method,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      },
-      (res) => {
-        let raw = '';
-        res.setEncoding('utf8');
-        res.on('data', (chunk) => {
-          raw += chunk;
-        });
-        res.on('end', () => {
-          const payload = {
-            statusCode: res.statusCode || 500,
-            body: raw,
-          };
-
-          if (payload.statusCode >= 200 && payload.statusCode < 300) {
-            resolve(payload);
-            return;
-          }
-
-          const parsed = parseDockerJson(raw);
-          const message = parsed?.message || raw || `Docker API request failed: ${method} ${requestPath}`;
-          reject(new Error(message));
-        });
-      }
-    );
-
-    req.on('error', reject);
-    req.end();
-  });
-}
-
-async function inspectDockerContainer(containerName) {
-  try {
-    const response = await callDockerApi('GET', `/containers/${encodeURIComponent(containerName)}/json`);
-    const payload = parseDockerJson(response.body);
-    return {
-      exists: true,
-      running: payload?.State?.Running === true,
-      status: payload?.State?.Status || null,
-      restartCount: payload?.RestartCount ?? null,
-    };
-  } catch (error) {
-    if (String(error.message || '').toLowerCase().includes('no such container')) {
-      return {
-        exists: false,
-        running: false,
-        status: 'missing',
-        restartCount: null,
-      };
-    }
-    throw error;
-  }
-}
-
-async function startDockerContainer(containerName) {
-  const state = await inspectDockerContainer(containerName);
-  if (!state.exists) {
-    throw new Error(`OCR container not found: ${containerName}`);
-  }
-  if (state.running) {
-    return {
-      stdout: `OCR container already running: ${containerName}`,
-      stderr: '',
-    };
-  }
-
-  await callDockerApi('POST', `/containers/${encodeURIComponent(containerName)}/start`);
-  return {
-    stdout: `Started OCR container: ${containerName}`,
-    stderr: '',
-  };
-}
-
-async function stopDockerContainer(containerName) {
-  const state = await inspectDockerContainer(containerName);
-  if (!state.exists) {
-    throw new Error(`OCR container not found: ${containerName}`);
-  }
-  if (!state.running) {
-    return {
-      stdout: `OCR container already stopped: ${containerName}`,
-      stderr: '',
-    };
-  }
-
-  await callDockerApi('POST', `/containers/${encodeURIComponent(containerName)}/stop?t=20`);
-  return {
-    stdout: `Stopped OCR container: ${containerName}`,
-    stderr: '',
-  };
-}
-
-async function startManagedOcrService() {
-  if (OCR_MANAGE_MODE === 'docker') {
-    return await startDockerContainer(OCR_CONTAINER_NAME);
-  }
-
-  if (OCR_MANAGE_MODE === 'script') {
-    return await runLocalScript(OCR_START_SCRIPT, 120000);
-  }
-
-  throw new Error('OCR service management is disabled in the current environment');
-}
-
-async function stopManagedOcrService() {
-  if (OCR_MANAGE_MODE === 'docker') {
-    return await stopDockerContainer(OCR_CONTAINER_NAME);
-  }
-
-  if (OCR_MANAGE_MODE === 'script') {
-    return await runLocalScript(OCR_STOP_SCRIPT, 60000);
-  }
-
-  throw new Error('OCR service management is disabled in the current environment');
-}
-
-async function fetchOcrHealth() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 2500);
-
-  try {
-    const response = await fetch(`${OCR_BASE_URL}/health`, {
-      method: 'GET',
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    return await response.json();
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-function resolvePublicBaseUrl(req) {
-  const forwardedProto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim();
-  const forwardedHost = String(req.headers['x-forwarded-host'] || '').split(',')[0].trim();
-  const host = forwardedHost || req.headers.host || '';
-  const protocol = forwardedProto || req.protocol || 'http';
-
-  if (!host) {
-    return OCR_BASE_URL;
-  }
-
-  return `${protocol}://${host}`;
-}
-
-async function getOcrServiceStatus(publicBaseUrl = OCR_BASE_URL) {
-  const health = await fetchOcrHealth();
-  const managedContainer = OCR_MANAGE_MODE === 'docker'
-    ? await inspectDockerContainer(OCR_CONTAINER_NAME)
-    : null;
-
-  return {
-    running: !!health,
-    baseUrl: publicBaseUrl,
-    extractUrl: `${publicBaseUrl}/api/extract`,
-    batchUrl: `${publicBaseUrl}/api/extract-batch`,
-    supportedFormats: ['pdf', 'jpg', 'jpeg', 'png', 'bmp', 'webp'],
-    lowPowerMode: true,
-    manageMode: OCR_MANAGE_MODE,
-    managedContainer,
-    processIsolated: health?.process_isolated === true,
-    health: health || null,
-  };
-}
-
-async function proxyOcrRequest(req, res, targetPath) {
-  try {
-    const headers = {};
-    const contentType = req.headers['content-type'];
-    if (contentType) {
-      headers['Content-Type'] = contentType;
-    }
-
-    let body;
-    const requestOptions = {
-      method: req.method,
-      headers,
-    };
-
-    if (req.method !== 'GET' && req.method !== 'HEAD') {
-      if (req.is('application/json')) {
-        body = JSON.stringify(req.body || {});
-      } else {
-        body = req;
-        requestOptions.duplex = 'half';
-      }
-      requestOptions.body = body;
-    }
-
-    const response = await fetch(`${OCR_BASE_URL}${targetPath}`, requestOptions);
-    const responseText = await response.text();
-    const upstreamContentType = response.headers.get('content-type');
-    if (upstreamContentType) {
-      res.setHeader('Content-Type', upstreamContentType);
-    }
-    res.status(response.status).send(responseText);
-  } catch (error) {
-    console.error(`OCR proxy failed for ${targetPath}:`, error);
-    res.status(502).json({
-      error: error?.message || 'OCR proxy request failed',
-    });
-  }
-}
-
-async function waitForOcrRunning(expectedRunning, timeoutMs = 120000, intervalMs = 1000, publicBaseUrl = OCR_BASE_URL) {
-  const deadline = Date.now() + timeoutMs;
-  do {
-    const status = await getOcrServiceStatus(publicBaseUrl);
-    if (status.running === expectedRunning) {
-      return status;
-    }
-    await sleep(intervalMs);
-  } while (Date.now() < deadline);
-
-  return await getOcrServiceStatus(publicBaseUrl);
-}
 
 // 涓棿浠?
 app.use(cors());
@@ -539,72 +256,6 @@ function authMiddleware(req, res, next) {
   }
 }
 
-app.post('/api/extract', async (req, res) => {
-  await proxyOcrRequest(req, res, '/api/extract');
-});
-
-app.post('/api/extract-batch', async (req, res) => {
-  await proxyOcrRequest(req, res, '/api/extract-batch');
-});
-
-app.get('/api/ocr/service/status', authMiddleware, async (req, res) => {
-  try {
-    const status = await getOcrServiceStatus(resolvePublicBaseUrl(req));
-    res.json({
-      success: true,
-      ...status,
-    });
-  } catch (error) {
-    console.error('获取 OCR 服务状态失败:', error);
-    res.status(500).json({ error: '获取 OCR 服务状态失败' });
-  }
-});
-
-app.post('/api/ocr/service/start', authMiddleware, async (req, res) => {
-  try {
-    const publicBaseUrl = resolvePublicBaseUrl(req);
-    const output = await startManagedOcrService();
-    const status = await waitForOcrRunning(true, 120000, 1000, publicBaseUrl);
-
-    if (!status.running) {
-      return res.status(500).json({
-        error: output.stderr || output.stdout || 'OCR 服务启动失败',
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'OCR 服务已启动',
-      output: output.stdout,
-      ...status,
-    });
-  } catch (error) {
-    console.error('启动 OCR 服务失败:', error);
-    res.status(500).json({
-      error: error?.stderr || error?.stdout || error?.message || '启动 OCR 服务失败',
-    });
-  }
-});
-
-app.post('/api/ocr/service/stop', authMiddleware, async (req, res) => {
-  try {
-    const publicBaseUrl = resolvePublicBaseUrl(req);
-    const output = await stopManagedOcrService();
-    const status = await waitForOcrRunning(false, 30000, 500, publicBaseUrl);
-
-    res.json({
-      success: true,
-      message: 'OCR 服务已关闭',
-      output: output.stdout,
-      ...status,
-    });
-  } catch (error) {
-    console.error('关闭 OCR 服务失败:', error);
-    res.status(500).json({
-      error: error?.stderr || error?.stdout || error?.message || '关闭 OCR 服务失败',
-    });
-  }
-});
 
 // 娣囨繂鐡?WebAPI 閺冦儱绻?- 閸欘亙绻氱€涙顑囨稉鈧弶陇顔囪ぐ鏇犳畱閺冦儱绻?
 async function saveWebApiLog(username, instanceId, logData) {
@@ -663,7 +314,7 @@ async function deleteWebApiLog(username, instanceId) {
   }
 }
 
-// 閸掓繂顫愰崠鏍閹撮攱鏆熼幑顔剧波閺?
+// 初始化账户数据文件和目录结构
 async function initAccountData(username) {
   const accountPath = getAccountFilePath(username);
   const instancesDir = getAccountInstancesDir(username);
@@ -721,10 +372,10 @@ async function readAccountData(username) {
       const results = await Promise.all(readPromises);
       results.filter(r => r).forEach(r => taskInstances.push(r));
     } catch {
-      // 閻╊喖缍嶆稉宥呯摠閸︺劍鍨ㄦ稉铏光敄
+      // 忽略损坏的实例文件
     }
 
-    // 閹稿绱戞慨瀣闂存帓搴?
+    // 按开始时间倒序排列
     taskInstances.sort((a, b) => new Date(b.startTime || 0) - new Date(a.startTime || 0));
 
     return { ...data, tasks: normalizedTasks, taskInstances };
@@ -733,7 +384,7 @@ async function readAccountData(username) {
   }
 }
 
-// 娣囨繂鐡ㄧ拹锔藉煕娑撶粯鏆熼幑?
+// 保存账户数据到文件
 async function saveAccountData(username, data) {
   const accountPath = getAccountFilePath(username);
   const { taskInstances, ...accountData } = data;
@@ -754,7 +405,7 @@ async function saveInstanceFile(username, instance) {
     await fs.mkdir(instancesDir, { recursive: true });
   }
 
-  // 娴ｈ法鏁ょ€圭偘绶?ID 娴ｆ粈璐熼弬鍥︽鍚嶏紝纭繚鍞竴鎬?
+  // 以实例 ID 为文件名，确保唯一性
   const filename = `${instance.id}.json`;
   const filepath = path.join(instancesDir, filename);
 
@@ -763,7 +414,7 @@ async function saveInstanceFile(username, instance) {
   return filename;
 }
 
-// 閸掔娀娅庨幍褑顢戠拋鏉跨秿閺傚洣娆?
+// 删除任务实例文件
 async function deleteInstanceFile(username, instanceId) {
   const instancesDir = getAccountInstancesDir(username);
 
@@ -780,7 +431,7 @@ async function deleteInstanceFile(username, instanceId) {
         const instance = await readJsonFileSafely(path.join(instancesDir, file));
         if (instance.id === instanceId) {
           await fs.unlink(path.join(instancesDir, file));
-          // 閸氬本妞傞崚鐘绘珟閸忓疇浠堥惃鍕）韫囨枃浠?
+          // 同时删除对应的 WebAPI 日志文件
           await deleteWebApiLog(username, instanceId);
           return true;
         }
@@ -961,13 +612,13 @@ app.get('/api/data', cacheMiddleware(3000), authMiddleware, async (req, res) => 
   }
 });
 
-// 娣囨繂鐡ㄩ弫鐗堝祦 - 娴兼ê瀵查敍姘閲忓啓鍏?
+// 保存数据 - 同时写入任务和实例数据
 app.post('/api/data', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
     const { tasks, taskInstances } = req.body;
 
-    // 娣囨繂鐡ㄦ稉缁樻殶閹?
+    // 读取现有数据后合并写入
     const accountData = await readAccountData(username);
     accountData.tasks = tasks || [];
     await saveAccountData(username, accountData);
@@ -1768,7 +1419,7 @@ app.post('/api/logs/webapi', authMiddleware, async (req, res) => {
   }
 });
 
-// 閼惧嘲褰囬幐鍥х暰鐎圭偘绶ラ惃鍕）韫?
+// 获取单条 WebAPI 日志
 app.get('/api/logs/:instanceId', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -1787,7 +1438,7 @@ app.get('/api/logs/:instanceId', authMiddleware, async (req, res) => {
   }
 });
 
-// 閸掔娀娅庨幐鍥х暰鐎圭偘绶ラ惃鍕）韫?
+// 删除单条 WebAPI 日志
 app.delete('/api/logs/:instanceId', authMiddleware, async (req, res) => {
   try {
     const { username } = req.user;
@@ -1819,7 +1470,7 @@ async function saveInstanceCallback(instance) {
     await fs.mkdir(instancesDir, { recursive: true });
   }
 
-  // 娴ｈ法鏁ょ€圭偘绶?ID 娴ｆ粈璐熼弬鍥︽閸?
+  // 以实例 ID 为文件名写入状态
   const filename = `${instance.id}.json`;
   const filepath = path.join(instancesDir, filename);
 

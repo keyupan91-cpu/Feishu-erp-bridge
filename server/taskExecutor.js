@@ -122,10 +122,13 @@ function formatDate(value, format = 'YYYY-MM-DD') {
     return String(timestamp);
   }
 
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  // 飞书日期字段存储的时间戳代表 UTC+8 午夜零点（中国时区）。
+  // 加 8 小时偏移后使用 UTC 方法提取日期，避免服务器时区（如 UTC）导致的日期偏差。
+  const CST_OFFSET_MS = 8 * 60 * 60 * 1000;
+  const date = new Date(timestamp + CST_OFFSET_MS);
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const day = String(date.getUTCDate()).padStart(2, '0');
 
   switch (format) {
     case 'YYYY-MM-DD':
@@ -139,7 +142,7 @@ function formatDate(value, format = 'YYYY-MM-DD') {
   }
 }
 
-// 鎻愬彇浜哄憳/婢舵岸鈧鐡у▓电殑鏂囨湰鍊?
+// 提取人员/多选字段的文本值
 function extractTextValue(value) {
   if (value === null || value === undefined) {
     return '';
