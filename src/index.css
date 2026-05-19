@@ -1,47 +1,4 @@
-/* 金蝶数据传输平台 - 企业级全局样式 */
-
-:root {
-  /* 主色调 - 浅蓝色 */
-  --primary-color: #4A90E2;
-  --primary-light: #7AB8F5;
-  --primary-dark: #2E6BC7;
-  --primary-bg: #F0F7FF;
-
-  /* 辅助色 - 暖黄色 */
-  --accent-color: #F5A623;
-  --accent-light: #FFD88A;
-  --accent-dark: #D48A0C;
-  --accent-bg: #FFF8E7;
-
-  /* 中性色 */
-  --text-primary: #2C3E50;
-  --text-secondary: #5D6D7E;
-  --text-muted: #95A5A6;
-  --border-color: #E8EDF2;
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F8FAFC;
-  --bg-hover: #F0F4F8;
-
-  /* 功能色 */
-  --success-color: #52C41A;
-  --warning-color: #FAAD14;
-  --error-color: #FF4D4F;
-  --info-color: #1890FF;
-
-  /* 阴影 */
-  --shadow-sm: 0 2px 4px rgba(74, 144, 226, 0.08);
-  --shadow-md: 0 4px 12px rgba(74, 144, 226, 0.12);
-  --shadow-lg: 0 8px 24px rgba(74, 144, 226, 0.16);
-
-  /* 圆角 */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-
-  /* 过渡 */
-  --transition-fast: 0.15s ease;
-  --transition-normal: 0.25s ease;
-}
+/* 云桥 CloudLink - 企业级全局样式 */
 
 * {
   box-sizing: border-box;
@@ -54,11 +11,9 @@ html, body {
   height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  color: var(--text-primary);
-  background: linear-gradient(135deg, #f5f7fa 0%, #e8ecf1 100%);
+  background: #F8FAFC;
   min-height: 100vh;
 }
 

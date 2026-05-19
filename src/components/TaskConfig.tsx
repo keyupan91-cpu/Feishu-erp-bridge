@@ -63,8 +63,7 @@ const cloneKingdeeConfig = (config: TaskConfig['kingdeeConfig']): TaskConfig['ki
 
 const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
   const { isMobile } = useResponsive();
-  const [activeKey, setActiveKey] = useState<string[]>(['1']); // 手风琴展开状态
-  const [kingdeeActiveKey, setKingdeeActiveKey] = useState<string[]>(['k1', 'k2']);
+  const [openPanel, setOpenPanel] = useState<string>('1'); // 全局手风琴：飞书+金蝶只能有一个展开
   const [templateEditorOpen, setTemplateEditorOpen] = useState(false);
   const [feishuConfig, setFeishuConfig] = useState(() => cloneFeishuConfig(task.feishuConfig));
   const [kingdeeConfig, setKingdeeConfig] = useState(() => cloneKingdeeConfig(task.kingdeeConfig));
@@ -86,7 +85,7 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
     setWriteBackFields(cloneWriteBackFields(nextFeishuConfig.writeBackFields || []));
     setFieldList([]);
     setPreviewLoadingId(null);
-    setKingdeeActiveKey(['k1', 'k2']);
+    setOpenPanel('1');
     setTemplateEditorOpen(false);
   }, [task.id, task.updatedAt]);
 
@@ -134,7 +133,7 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
     }
     if (!feishuConfig.appId || !feishuConfig.appSecret || !feishuConfig.appToken || !feishuConfig.tableId) {
       message.error('请先完善飞书配置');
-      setActiveKey(['1']);
+      setOpenPanel('1');
       return;
     }
 
@@ -349,7 +348,7 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
   const handleRefreshFields = async () => {
     if (!feishuConfig.appToken || !feishuConfig.tableId) {
       message.error('请先填写飞书 App Token 和表格 ID');
-      setActiveKey(['1']); // 展开基础参数面板
+      setOpenPanel('1'); // 展开基础参数面板
       return;
     }
 
@@ -1007,14 +1006,9 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
   const renderKingdeePanel = () => (
     <Form layout="vertical" size="large">
       <Collapse
-        activeKey={kingdeeActiveKey}
-        onChange={(key) => {
-          if (Array.isArray(key)) {
-            setKingdeeActiveKey(key.map((item) => String(item)));
-            return;
-          }
-          setKingdeeActiveKey(key ? [String(key)] : []);
-        }}
+        accordion
+        activeKey={openPanel}
+        onChange={(key) => setOpenPanel(key as string ?? '')}
         size="large"
       >
         <Collapse.Panel header="金蝶基础参数" key="k1">
@@ -1258,7 +1252,55 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
             cancelText="取消"
             width={isMobile ? 360 : 980}
           >
+            <div style={{ marginBottom: 8 }}>
+              <Button
+                size="small"
+                onClick={() => {
+                  Modal.info({
+                    title: '选择变量插入',
+                    content: (
+                      <div>
+                        <p>点击变量插入到模板中：</p>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                          {fieldParams.length === 0 ? (
+                            <span style={{ color: '#999' }}>暂无变量，请先在飞书参数中添加字段参数</span>
+                          ) : (
+                            fieldParams.map((param) => (
+                              <Button
+                                key={param.id}
+                                size="small"
+                                onClick={() => {
+                                  const textarea = document.querySelector('textarea[data-template="kingdee-expanded"]') as HTMLTextAreaElement | null;
+                                  const currentTemplate = kingdeeConfig.dataTemplate || '';
+                                  const cursorPos = textarea?.selectionStart ?? currentTemplate.length;
+                                  const textBefore = currentTemplate.substring(0, cursorPos);
+                                  const textAfter = currentTemplate.substring(cursorPos);
+                                  const variable = `{{${param.variableName}}}`;
+                                  const newTemplate = textBefore + variable + textAfter;
+                                  setKingdeeConfig({
+                                    ...kingdeeConfig,
+                                    dataTemplate: newTemplate,
+                                  });
+                                  Modal.destroyAll();
+                                  message.success(`已插入变量 {{${param.variableName}}}`);
+                                }}
+                              >
+                                {param.variableName} ({param.fieldName})
+                              </Button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    ),
+                    onOk() {},
+                  });
+                }}
+              >
+                导入变量
+              </Button>
+            </div>
             <TextArea
+              data-template="kingdee-expanded"
               rows={isMobile ? 18 : 26}
               value={kingdeeConfig.dataTemplate}
               onChange={(e) =>
@@ -1297,8 +1339,8 @@ const TaskConfigComponent: React.FC<TaskConfigProps> = ({ task, onSave }) => {
         </h3>
         <Collapse
           accordion
-          activeKey={activeKey}
-          onChange={(key) => setActiveKey(Array.isArray(key) ? key : [key])}
+          activeKey={openPanel}
+          onChange={(key) => setOpenPanel(key as string ?? '')}
           size="large"
         >
           {renderCollapsePanel()}

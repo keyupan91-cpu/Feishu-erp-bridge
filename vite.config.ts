@@ -51,12 +51,11 @@ export default defineConfig({
     port: 5173,
     strictPort: true, // 如果端口被占用则报错，而不是自动切换端口
     allowedHosts: [
-      '.trycloudflare.com',
       'keyupan.cn',
       'www.keyupan.cn',
       'erp.keyupan.cn',
       '.keyupan.cn',
-    ], // 允许 Cloudflare Tunnel 与 keyupan 域名访问
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:3001',

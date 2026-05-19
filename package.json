@@ -1,18 +1,16 @@
 {
-  "name": "kingdee-sync-platform",
+  "name": "cloudlink",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run server\" \"vite\"",
-    "dev:lite": "powershell -ExecutionPolicy Bypass -File scripts/start-dev-lite.ps1",
     "dev:client": "vite",
     "dev:server": "node server/server.js",
     "server": "node server/server.js",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "start:tunnel": "node scripts/start-tunnel.js",
     "start:all": "node scripts/start-all.js",
     "start": "node scripts/start-all.js",
     "install:all": "npm install && cd server && npm install"

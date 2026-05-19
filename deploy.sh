@@ -30,21 +30,12 @@ echo ""
 echo "📦 安装依赖..."
 npm install
 
-# 检查 cloudflared
-echo ""
-echo "🌐 检查 Cloudflare Tunnel..."
-if [ ! -f "cloudflared-linux-amd64" ] && [ ! -f "cloudflared" ]; then
-    echo "⚠️  cloudflared 不存在"
-    echo "   如需公网访问，请下载 cloudflared:"
-    echo "   https://developers.cloudflare.com/cloudflare-one/connections/connect-non-http/private-net/"
-fi
-
 echo ""
 echo "╔══════════════════════════════════════════════════════════╗"
 echo "║                    部署完成！                            ║"
 echo "╠══════════════════════════════════════════════════════════╣"
 echo "║  启动命令：                                              ║"
 echo "║    npm run dev         - 开发模式（前后端）              ║"
-echo "║    npm run start:all   - 生产模式（前后端 + Tunnel）     ║"
+echo "║    npm run start:all   - 生产模式（前后端）              ║"
 echo "╚══════════════════════════════════════════════════════════╝"
 echo ""

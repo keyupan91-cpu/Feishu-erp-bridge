@@ -23,9 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Cloudflared
-cloudflared-windows-amd64.exe
-*.exe
 
 # PID files
 *.pid.json
@@ -41,11 +38,6 @@ temp_*
 fix_*.py
 *.patch
 tmp_invalid_format.txt
-
-# Python cache / runtime
-__pycache__/
-*.py[cod]
-ocr_service/.runtime/
 
 # Claude
 .claude/

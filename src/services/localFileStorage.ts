@@ -216,7 +216,7 @@ class LocalFileStorage {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `金蝶数据传输平台_${data.account.username}_${new Date().toISOString().slice(0, 10)}.json`;
+    link.download = `云桥_${data.account.username}_${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
